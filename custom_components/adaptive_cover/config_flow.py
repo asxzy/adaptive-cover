@@ -24,6 +24,7 @@ from .const import (
     CONF_DEFAULT_HEIGHT,
     CONF_DELTA_POSITION,
     CONF_DELTA_TIME,
+    CONF_COVER_BOTTOM,
     CONF_DISTANCE,
     CONF_ENABLE_BLIND_SPOT,
     CONF_END_ENTITY,
@@ -55,6 +56,7 @@ from .const import (
     CONF_PRESENCE_ENTITY,
     CONF_RETURN_SUNSET,
     CONF_SENSOR_TYPE,
+    CONF_SHADED_AREA_HEIGHT,
     CONF_START_ENTITY,
     CONF_START_TIME,
     CONF_SUNRISE_OFFSET,
@@ -171,6 +173,16 @@ VERTICAL_OPTIONS = vol.Schema(
         vol.Required(CONF_DISTANCE, default=0.5): selector.NumberSelector(
             selector.NumberSelectorConfig(
                 min=0.1, max=2, step=0.1, mode="slider", unit_of_measurement="m"
+            )
+        ),
+        vol.Optional(CONF_COVER_BOTTOM, default=0): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0, max=6, step=0.01, mode="slider", unit_of_measurement="m"
+            )
+        ),
+        vol.Optional(CONF_SHADED_AREA_HEIGHT, default=0): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0, max=6, step=0.01, mode="slider", unit_of_measurement="m"
             )
         ),
     }
@@ -573,6 +585,8 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
                 CONF_AZIMUTH: self.config.get(CONF_AZIMUTH),
                 CONF_HEIGHT_WIN: self.config.get(CONF_HEIGHT_WIN),
                 CONF_DISTANCE: self.config.get(CONF_DISTANCE),
+                CONF_COVER_BOTTOM: self.config.get(CONF_COVER_BOTTOM, 0),
+                CONF_SHADED_AREA_HEIGHT: self.config.get(CONF_SHADED_AREA_HEIGHT, 0),
                 CONF_DEFAULT_HEIGHT: self.config.get(CONF_DEFAULT_HEIGHT),
                 CONF_MAX_POSITION: self.config.get(CONF_MAX_POSITION),
                 CONF_MIN_POSITION: self.config.get(CONF_MIN_POSITION),
@@ -637,7 +651,7 @@ class OptionsFlowHandler(OptionsFlow):
     def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize options flow."""
         # super().__init__(config_entry)
-        self.config_entry = config_entry
+        self._config_entry = config_entry
         self.current_config: dict = dict(config_entry.data)
         self.options = dict(config_entry.options)
         self.sensor_type: SensorType = (
