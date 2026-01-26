@@ -500,25 +500,44 @@ class AdaptiveVerticalCover(AdaptiveGeneralCover):
     """Calculate state for Vertical blinds."""
 
     distance: float
-    h_win: float
+    h_win: float  # cover_top - height from floor to top of cover
+    cover_bottom: float = 0.0  # height from floor to bottom of fully extended cover
+    shaded_area_height: float = 0.0  # height of the area to protect from sun
+
+    @property
+    def cover_height(self) -> float:
+        """Total cover extension range."""
+        return self.h_win - self.cover_bottom
 
     def calculate_position(self) -> float:
-        """Calculate blind height."""
-        # calculate blind height
-        blind_height = np.clip(
-            (self.distance / cos(rad(self.gamma))) * tan(rad(self.sol_elev)),
-            0,
-            self.h_win,
-        )
-        return blind_height
+        """Calculate cover position height to protect shaded area.
+
+        Returns the height from floor that the cover bottom needs to reach
+        to cast a shadow that protects the shaded area from direct sunlight.
+        """
+        # Effective distance accounting for sun azimuth angle relative to window
+        d_eff = self.distance / cos(rad(self.gamma))
+
+        # Height at which cover bottom must be to cast shadow at shaded_area_height
+        cover_position = self.shaded_area_height + d_eff * tan(rad(self.sol_elev))
+
+        # Clip to valid range (between cover_bottom and cover_top)
+        return np.clip(cover_position, self.cover_bottom, self.h_win)
 
     def calculate_percentage(self) -> float:
-        """Convert blind height to percentage or default value."""
+        """Convert cover position to open percentage.
+
+        0% = cover fully extended (closed)
+        100% = cover fully retracted (open)
+        """
         position = self.calculate_position()
         self.logger.debug(
-            "Converting height to percentage: %s / %s * 100", position, self.h_win
+            "Converting position to percentage: (%s - %s) / %s * 100",
+            position,
+            self.cover_bottom,
+            self.cover_height,
         )
-        result = position / self.h_win * 100
+        result = (position - self.cover_bottom) / self.cover_height * 100
         return round(result)
 
 
@@ -526,8 +545,8 @@ class AdaptiveVerticalCover(AdaptiveGeneralCover):
 class AdaptiveHorizontalCover(AdaptiveVerticalCover):
     """Calculate state for Horizontal blinds."""
 
-    awn_length: float
-    awn_angle: float
+    awn_length: float = 2.1  # default required due to parent class having defaults
+    awn_angle: float = 0.0  # default required due to parent class having defaults
 
     def calculate_position(self) -> float:
         """Calculate awn length from blind height."""
