@@ -6,14 +6,36 @@ from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
+from homeassistant.components.weather import (
+    ATTR_CONDITION_CLEAR_NIGHT,
+    ATTR_CONDITION_CLOUDY,
+    ATTR_CONDITION_PARTLYCLOUDY,
+    ATTR_CONDITION_RAINY,
+    ATTR_CONDITION_SNOWY,
+    ATTR_CONDITION_SUNNY,
+    ATTR_CONDITION_WINDY,
+    ATTR_CONDITION_WINDY_VARIANT,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import state_attr
 from numpy import cos, sin, tan
 from numpy import radians as rad
 
+from .config_context_adapter import ConfigContextAdapter
 from .helpers import get_domain, get_safe_state
 from .sun import SunData
-from .config_context_adapter import ConfigContextAdapter
+
+# Default weather conditions that allow direct sunlight
+DEFAULT_WEATHER_CONDITIONS = [
+    ATTR_CONDITION_SUNNY,
+    ATTR_CONDITION_PARTLYCLOUDY,
+    ATTR_CONDITION_CLOUDY,
+    ATTR_CONDITION_CLEAR_NIGHT,
+    ATTR_CONDITION_WINDY,
+    ATTR_CONDITION_WINDY_VARIANT,
+    ATTR_CONDITION_RAINY,
+    ATTR_CONDITION_SNOWY,
+]
 
 
 @dataclass
@@ -379,12 +401,21 @@ class ClimateCoverData:
         else:
             self.logger.debug("has_direct_sun(): No weather entity defined")
             return True
-        if self.weather_condition is not None:
-            matches = weather_state in self.weather_condition
+        # Use configured conditions or default
+        conditions = self.weather_condition
+        if conditions is None or len(conditions) == 0:
+            conditions = DEFAULT_WEATHER_CONDITIONS
             self.logger.debug(
-                "has_direct_sun(): Weather: %s = %s", weather_state, matches
+                "has_direct_sun(): No weather conditions configured, using defaults"
             )
-            return matches
+        matches = weather_state in conditions
+        self.logger.debug(
+            "has_direct_sun(): Weather: %s in %s = %s",
+            weather_state,
+            conditions,
+            matches,
+        )
+        return matches
 
     @property
     def lux(self) -> bool:
