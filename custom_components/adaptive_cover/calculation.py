@@ -203,11 +203,15 @@ class NormalCoverState:
     """Compute state for normal operation."""
 
     cover: AdaptiveGeneralCover
-    # Optional weather check - when set, only use calculated position if weather has direct sun
-    has_direct_sun: bool | None = None
 
-    def get_state(self) -> int:
-        """Return state."""
+    def get_state(self, has_direct_sun: bool | None = None) -> int:
+        """Return state.
+
+        Args:
+            has_direct_sun: Optional weather check. When set, only use calculated
+                position if weather allows direct sun. None means no weather check.
+
+        """
         self.cover.logger.debug("Determining normal position")
         dsv = self.cover.direct_sun_valid
         self.cover.logger.debug(
@@ -215,7 +219,7 @@ class NormalCoverState:
         )
 
         # Check weather condition if provided
-        weather_allows_sun = self.has_direct_sun is None or self.has_direct_sun
+        weather_allows_sun = has_direct_sun is None or has_direct_sun
         self.cover.logger.debug("Weather allows direct sun? %s", weather_allows_sun)
 
         if dsv and weather_allows_sun:
@@ -462,7 +466,7 @@ class ClimateCoverState(NormalCoverState):
             self.cover.logger.debug(
                 "n_w_p(): Actual sun exists, calculating blocking position"
             )
-            return super().get_state()
+            return super().get_state(has_direct_sun=True)
 
         self.cover.logger.debug("n_w_p(): No actual sun, using default")
         return self.cover.default
@@ -489,7 +493,7 @@ class ClimateCoverState(NormalCoverState):
             return 100
 
         self.cover.logger.debug("n_wo_p(): Intermediate temp, using calculated")
-        return super().get_state()
+        return super().get_state(has_direct_sun=True)
 
     def tilt_with_presence(self, degrees: int) -> int:
         """Determine state for tilted blinds with occupants.
@@ -501,7 +505,7 @@ class ClimateCoverState(NormalCoverState):
             self.cover.logger.debug(
                 "t_w_p(): Actual sun exists, calculating blocking angle"
             )
-            return super().get_state()
+            return super().get_state(has_direct_sun=True)
 
         self.cover.logger.debug("t_w_p(): No actual sun, using default")
         return self.cover.default
@@ -538,7 +542,7 @@ class ClimateCoverState(NormalCoverState):
             return 100
 
         self.cover.logger.debug("t_wo_p(): Intermediate temp, using calculated")
-        return super().get_state()
+        return super().get_state(has_direct_sun=True)
 
     def tilt_state(self):
         """Add tilt specific controls."""

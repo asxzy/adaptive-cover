@@ -300,12 +300,14 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             self.logger.debug("Control method is %s", self.control_method)
 
         # calculate the state of the cover (pass weather check for basic mode)
-        self.normal_cover_state = NormalCoverState(cover_data, self._has_direct_sun)
+        self.normal_cover_state = NormalCoverState(cover_data)
         self.logger.debug(
             "Determined normal cover state to be %s", self.normal_cover_state
         )
 
-        self.default_state = round(self.normal_cover_state.get_state())
+        self.default_state = round(
+            self.normal_cover_state.get_state(has_direct_sun=self._has_direct_sun)
+        )
         self.logger.debug("Determined default state to be %s", self.default_state)
         state = self.state
 
