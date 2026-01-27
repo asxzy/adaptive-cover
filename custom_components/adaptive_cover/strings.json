@@ -55,7 +55,7 @@
           "interp": "Set custom open/close positions for My Cover, if it doesn't fully operate at 0-100%"
         },
         "data_description": {
-          "set_azimuth": "Adjust Azimuth",
+          "set_azimuth": "The compass direction your window faces (0°=North, 90°=East, 180°=South, 270°=West)",
           "window_height": "Specify window height in meters",
           "distance_shaded_area": "Distance from cover to shaded area in meters",
           "default_percentage": "Default cover position as a percentage",
@@ -130,7 +130,7 @@
           "interp": "Set custom open/close positions for My Cover, if it doesn't fully operate at 0-100%"
         },
         "data_description": {
-          "set_azimuth": "Specify the Azimuth",
+          "set_azimuth": "The compass direction your window faces (0°=North, 90°=East, 180°=South, 270°=West)",
           "window_height": "Adjust the height of the awning from the level of the workarea",
           "length_awning": "Total span length in meters",
           "angle": "Angle of the attached awning measured perpendicular from the wall to the ground",
@@ -170,7 +170,7 @@
           "interp": "Set custom open/close positions for My Cover, if it doesn't fully operate at 0-100%"
         },
         "data_description": {
-          "set_azimuth": "Specify the Azimuth",
+          "set_azimuth": "The compass direction your window faces (0°=North, 90°=East, 180°=South, 270°=West)",
           "slat_depth": "Depth of each individual slat in centimeters",
           "slat_distance": "Vertical distance between two slats in centimeters",
           "default_percentage": "Default cover position as a percentage",
@@ -275,7 +275,7 @@
           "interp": "Set custom open/close positions for My Cover, if it doesn't fully operate at 0-100%"
         },
         "data_description": {
-          "set_azimuth": "Adjust Azimuth",
+          "set_azimuth": "The compass direction your window faces (0°=North, 90°=East, 180°=South, 270°=West)",
           "window_height": "Specify window height in meters",
           "distance_shaded_area": "Distance from cover to shaded area in meters",
           "default_percentage": "Default cover position as a percentage",
@@ -350,7 +350,7 @@
           "interp": "Set custom open/close positions for My Cover, if it doesn't fully operate at 0-100%"
         },
         "data_description": {
-          "set_azimuth": "Specify the Azimuth",
+          "set_azimuth": "The compass direction your window faces (0°=North, 90°=East, 180°=South, 270°=West)",
           "window_height": "Adjust the height of the awning from the level of the workarea",
           "length_awning": "Total span length in meters",
           "angle": "Angle of the attached awning measured perpendicular from the wall to the ground",
@@ -390,7 +390,7 @@
           "interp": "Set custom open/close positions for My Cover, if it doesn't fully operate at 0-100%"
         },
         "data_description": {
-          "set_azimuth": "Specify the Azimuth",
+          "set_azimuth": "The compass direction your window faces (0°=North, 90°=East, 180°=South, 270°=West)",
           "slat_depth": "Depth of each individual slat in centimeters",
           "slat_distance": "Vertical distance between two slats in centimeters",
           "default_percentage": "Default cover position as a percentage",
