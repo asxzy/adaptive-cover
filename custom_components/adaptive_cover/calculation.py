@@ -395,6 +395,11 @@ class ClimateCoverData:
         # Use override if set (from coordinator's stored value)
         if self._has_direct_sun_override is not None:
             return self._has_direct_sun_override
+        self.logger.debug(
+            "has_direct_sun(): weather_condition=%s (type=%s)",
+            self.weather_condition,
+            type(self.weather_condition).__name__,
+        )
         weather_state = None
         if self.weather_entity is not None:
             weather_state = get_safe_state(self.hass, self.weather_entity)
@@ -403,7 +408,7 @@ class ClimateCoverData:
             return True
         # Use configured conditions or default
         conditions = self.weather_condition
-        if conditions is None or len(conditions) == 0:
+        if not conditions:
             conditions = DEFAULT_WEATHER_CONDITIONS
             self.logger.debug(
                 "has_direct_sun(): No weather conditions configured, using defaults"
