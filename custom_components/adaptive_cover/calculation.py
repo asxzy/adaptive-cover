@@ -348,17 +348,19 @@ class ClimateCoverData:
         return is_it
 
     @property
-    def is_sunny(self) -> bool:
-        """Check if condition can contain radiation in winter."""
+    def has_direct_sun(self) -> bool:
+        """Check if weather condition allows direct sunlight."""
         weather_state = None
         if self.weather_entity is not None:
             weather_state = get_safe_state(self.hass, self.weather_entity)
         else:
-            self.logger.debug("is_sunny(): No weather entity defined")
+            self.logger.debug("has_direct_sun(): No weather entity defined")
             return True
         if self.weather_condition is not None:
             matches = weather_state in self.weather_condition
-            self.logger.debug("is_sunny(): Weather: %s = %s", weather_state, matches)
+            self.logger.debug(
+                "has_direct_sun(): Weather: %s = %s", weather_state, matches
+            )
             return matches
 
     @property
@@ -400,34 +402,28 @@ class ClimateCoverState(NormalCoverState):
 
     def normal_with_presence(self) -> int:
         """Determine state for horizontal and vertical covers with occupants."""
+        # When occupied: prioritize sun blocking based on weather condition
+        # Climate mode (summer/winter) only affects behavior when not occupied
 
-        is_summer = self.climate_data.is_summer
-
-        # Check if it's not summer and either lux, irradiance or sunny weather is present
-        if not is_summer and (
-            self.climate_data.lux
-            or self.climate_data.irradiance
-            or not self.climate_data.is_sunny
-        ):
-            # If it's winter and the cover is valid, return 100
-            if self.climate_data.is_winter and self.cover.valid:
-                self.cover.logger.debug(
-                    "n_w_p(): Winter and sun is in front of window = use 100"
-                )
-                return 100
-            # Otherwise, return the default cover state
+        # If weather allows direct sun, calculate sun-blocking position
+        if self.climate_data.has_direct_sun:
             self.cover.logger.debug(
-                "n_w_p(): it's not summer and sunny weather is not present = use default"
+                "n_w_p(): Weather has direct sun, calculating sun-blocking position"
+            )
+            return super().get_state()
+
+        # If lux or irradiance is below threshold, use default (not enough sun to block)
+        if self.climate_data.lux or self.climate_data.irradiance:
+            self.cover.logger.debug(
+                "n_w_p(): Lux/irradiance below threshold, using default"
             )
             return self.cover.default
 
-        # If it's summer and there's a transparent blind, return 0
-        if is_summer and self.climate_data.transparent_blind:
-            return 0
-
-        # If none of the above conditions are met, get the state from the parent class
-        self.cover.logger.debug("n_w_p(): None of the climate conditions are met")
-        return super().get_state()
+        # Weather has no direct sun and no lux/irradiance sensors, use default
+        self.cover.logger.debug(
+            "n_w_p(): Weather has no direct sun, using default"
+        )
+        return self.cover.default
 
     def normal_without_presence(self) -> int:
         """Determine state for horizontal and vertical covers without occupants."""
@@ -443,7 +439,7 @@ class ClimateCoverState(NormalCoverState):
         if self.cover.valid and (
             self.climate_data.lux
             or self.climate_data.irradiance
-            or not self.climate_data.is_sunny
+            or not self.climate_data.has_direct_sun
         ):
             if self.climate_data.is_summer:
                 # If it's summer, return 45 degrees
