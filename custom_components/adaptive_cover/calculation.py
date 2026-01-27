@@ -432,7 +432,8 @@ class ClimateCoverState(NormalCoverState):
                 return 0
             if self.climate_data.is_winter:
                 return 100
-        return self.cover.default
+        # Temperature is intermediate - use calculated position instead of default
+        return super().get_state()
 
     def tilt_with_presence(self, degrees: int) -> int:
         """Determine state for tilted blinds with occupants."""
