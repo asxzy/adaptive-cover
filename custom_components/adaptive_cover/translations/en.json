@@ -60,7 +60,7 @@
           "interp": "Set custom open/close positions for My Cover, if it doesn't fully operate at 0-100%"
         },
         "data_description": {
-          "set_azimuth": "Adjust Azimuth",
+          "set_azimuth": "The compass direction your window faces (0°=North, 90°=East, 180°=South, 270°=West)",
           "window_height": "Height from floor to the top of the cover (mounting point) in meters",
           "cover_bottom": "Height from floor to the bottom of the fully extended cover in meters. Default 0 means cover extends to floor.",
           "shaded_area_height": "Height from floor of the area to protect from sun (e.g., desk height) in meters. Default 0 means floor level.",
@@ -144,7 +144,7 @@
           "interp": "Set custom open/close positions for My Cover, if it doesn't fully operate at 0-100%"
         },
         "data_description": {
-          "set_azimuth": "Specify the Azimuth",
+          "set_azimuth": "The compass direction your window faces (0°=North, 90°=East, 180°=South, 270°=West)",
           "window_height": "Height from floor to the top of the awning in meters",
           "cover_bottom": "Height from floor to the bottom of the fully extended awning in meters. Default 0 means awning extends to floor.",
           "shaded_area_height": "Height from floor of the area to protect from sun (e.g., desk height) in meters. Default 0 means floor level.",
@@ -190,7 +190,7 @@
           "interp": "Set custom open/close positions for My Cover, if it doesn't fully operate at 0-100%"
         },
         "data_description": {
-          "set_azimuth": "Specify the Azimuth",
+          "set_azimuth": "The compass direction your window faces (0°=North, 90°=East, 180°=South, 270°=West)",
           "slat_depth": "Depth of each individual slat in centimeters",
           "slat_distance": "Vertical distance between two slats in centimeters",
           "default_percentage": "Default cover position as a percentage",
@@ -301,7 +301,7 @@
           "interp": "Set custom open/close positions for My Cover, if it doesn't fully operate at 0-100%"
         },
         "data_description": {
-          "set_azimuth": "Adjust Azimuth",
+          "set_azimuth": "The compass direction your window faces (0°=North, 90°=East, 180°=South, 270°=West)",
           "window_height": "Height from floor to the top of the cover (mounting point) in meters",
           "cover_bottom": "Height from floor to the bottom of the fully extended cover in meters. Default 0 means cover extends to floor.",
           "shaded_area_height": "Height from floor of the area to protect from sun (e.g., desk height) in meters. Default 0 means floor level.",
@@ -385,7 +385,7 @@
           "interp": "Set custom open/close positions for My Cover, if it doesn't fully operate at 0-100%"
         },
         "data_description": {
-          "set_azimuth": "Specify the Azimuth",
+          "set_azimuth": "The compass direction your window faces (0°=North, 90°=East, 180°=South, 270°=West)",
           "window_height": "Height from floor to the top of the awning in meters",
           "cover_bottom": "Height from floor to the bottom of the fully extended awning in meters. Default 0 means awning extends to floor.",
           "shaded_area_height": "Height from floor of the area to protect from sun (e.g., desk height) in meters. Default 0 means floor level.",
@@ -431,7 +431,7 @@
           "interp": "Set custom open/close positions for My Cover, if it doesn't fully operate at 0-100%"
         },
         "data_description": {
-          "set_azimuth": "Specify the Azimuth",
+          "set_azimuth": "The compass direction your window faces (0°=North, 90°=East, 180°=South, 270°=West)",
           "slat_depth": "Depth of each individual slat in centimeters",
           "slat_distance": "Vertical distance between two slats in centimeters",
           "default_percentage": "Default cover position as a percentage",
