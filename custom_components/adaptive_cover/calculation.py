@@ -203,6 +203,8 @@ class NormalCoverState:
     """Compute state for normal operation."""
 
     cover: AdaptiveGeneralCover
+    # Optional weather check - when set, only use calculated position if weather has direct sun
+    has_direct_sun: bool | None = None
 
     def get_state(self) -> int:
         """Return state."""
@@ -211,14 +213,22 @@ class NormalCoverState:
         self.cover.logger.debug(
             "Sun directly in front of window & before sunset + offset? %s", dsv
         )
-        if dsv:
+
+        # Check weather condition if provided
+        weather_allows_sun = self.has_direct_sun is None or self.has_direct_sun
+        self.cover.logger.debug("Weather allows direct sun? %s", weather_allows_sun)
+
+        if dsv and weather_allows_sun:
             state = self.cover.calculate_percentage()
             self.cover.logger.debug(
-                "Yes sun in window: using calculated percentage (%s)", state
+                "Yes sun in window & weather sunny: using calculated percentage (%s)",
+                state,
             )
         else:
             state = self.cover.default
-            self.cover.logger.debug("No sun in window: using default value (%s)", state)
+            self.cover.logger.debug(
+                "No sun in window or weather cloudy: using default value (%s)", state
+            )
 
         result = np.clip(state, 0, 100)
         if self.cover.apply_max_position and result > self.cover.max_pos:
@@ -251,6 +261,9 @@ class ClimateCoverData:
     temp_summer_outside: float
     _use_lux: bool
     _use_irradiance: bool
+    # Override fields - when set, these values are used instead of computing from entities
+    _is_presence_override: bool | None = None
+    _has_direct_sun_override: bool | None = None
 
     @property
     def outside_temperature(self):
@@ -290,6 +303,9 @@ class ClimateCoverData:
     @property
     def is_presence(self):
         """Checks if people are present."""
+        # Use override if set (from coordinator's stored value)
+        if self._is_presence_override is not None:
+            return self._is_presence_override
         presence = None
         if self.presence_entity is not None:
             presence = get_safe_state(self.hass, self.presence_entity)
@@ -350,6 +366,9 @@ class ClimateCoverData:
     @property
     def has_direct_sun(self) -> bool:
         """Check if weather condition allows direct sunlight."""
+        # Use override if set (from coordinator's stored value)
+        if self._has_direct_sun_override is not None:
+            return self._has_direct_sun_override
         weather_state = None
         if self.weather_entity is not None:
             weather_state = get_safe_state(self.hass, self.weather_entity)
@@ -390,6 +409,39 @@ class ClimateCoverState(NormalCoverState):
 
     climate_data: ClimateCoverData
 
+    def _has_actual_sun(self) -> bool:
+        """Check if there is actual direct sunlight.
+
+        Combines three checks:
+        1. Sun geometry: direct_sun_valid (in front + not sunset + not blind spot)
+        2. Weather: has_direct_sun (sunny, not cloudy)
+        3. Lux/Irradiance: if configured AND enabled, reading must be >= threshold
+
+        Note on lux/irradiance:
+        - self.climate_data.lux returns True if reading < threshold (no actual sun)
+        - self.climate_data.irradiance returns True if reading < threshold (no actual sun)
+        """
+        # Check 1: Sun geometry
+        if not self.cover.direct_sun_valid:
+            self.cover.logger.debug("_has_actual_sun: No - sun not in valid position")
+            return False
+
+        # Check 2: Weather condition
+        if not self.climate_data.has_direct_sun:
+            self.cover.logger.debug("_has_actual_sun: No - weather says no direct sun")
+            return False
+
+        # Check 3: Lux/irradiance override (if configured and enabled)
+        # These return True when reading is BELOW threshold (meaning no actual sun)
+        if self.climate_data.lux or self.climate_data.irradiance:
+            self.cover.logger.debug(
+                "_has_actual_sun: No - lux/irradiance below threshold"
+            )
+            return False
+
+        self.cover.logger.debug("_has_actual_sun: Yes - actual sun confirmed")
+        return True
+
     def normal_type_cover(self) -> int:
         """Determine state for horizontal and vertical covers."""
 
@@ -401,64 +453,91 @@ class ClimateCoverState(NormalCoverState):
         return self.normal_without_presence()
 
     def normal_with_presence(self) -> int:
-        """Determine state for horizontal and vertical covers with occupants."""
-        # When occupied: prioritize sun blocking based on weather condition
-        # Climate mode (summer/winter) only affects behavior when not occupied
+        """Determine state for horizontal and vertical covers with occupants.
 
-        # If weather allows direct sun, calculate sun-blocking position
-        if self.climate_data.has_direct_sun:
+        When occupied: block sun for comfort (against glare/sunlight).
+        Temperature (summer/winter) is IGNORED in this mode.
+        """
+        if self._has_actual_sun():
             self.cover.logger.debug(
-                "n_w_p(): Weather has direct sun, calculating sun-blocking position"
+                "n_w_p(): Actual sun exists, calculating blocking position"
             )
             return super().get_state()
 
-        # If lux or irradiance is below threshold, use default (not enough sun to block)
-        if self.climate_data.lux or self.climate_data.irradiance:
-            self.cover.logger.debug(
-                "n_w_p(): Lux/irradiance below threshold, using default"
-            )
-            return self.cover.default
-
-        # Weather has no direct sun and no lux/irradiance sensors, use default
-        self.cover.logger.debug(
-            "n_w_p(): Weather has no direct sun, using default"
-        )
+        self.cover.logger.debug("n_w_p(): No actual sun, using default")
         return self.cover.default
 
     def normal_without_presence(self) -> int:
-        """Determine state for horizontal and vertical covers without occupants."""
-        if self.cover.valid:
-            if self.climate_data.is_summer:
-                return 0
-            if self.climate_data.is_winter:
-                return 100
-        # Temperature is intermediate - use calculated position instead of default
+        """Determine state for horizontal and vertical covers without occupants.
+
+        When not occupied: optimize temperature based on actual sunlight.
+        - Summer: close (0) to block heat
+        - Winter: open (100) to let heat in
+        - Intermediate: calculated position
+        """
+        if not self._has_actual_sun():
+            self.cover.logger.debug("n_wo_p(): No actual sun, using default")
+            return self.cover.default
+
+        # Actual sun exists - optimize by temperature
+        if self.climate_data.is_summer:
+            self.cover.logger.debug("n_wo_p(): Summer + actual sun, closing (0)")
+            return 0
+
+        if self.climate_data.is_winter:
+            self.cover.logger.debug("n_wo_p(): Winter + actual sun, opening (100)")
+            return 100
+
+        self.cover.logger.debug("n_wo_p(): Intermediate temp, using calculated")
         return super().get_state()
 
     def tilt_with_presence(self, degrees: int) -> int:
-        """Determine state for tilted blinds with occupants."""
-        if self.cover.valid and (
-            self.climate_data.lux
-            or self.climate_data.irradiance
-            or not self.climate_data.has_direct_sun
-        ):
-            if self.climate_data.is_summer:
-                # If it's summer, return 45 degrees
-                return 45 / degrees * 100
+        """Determine state for tilted blinds with occupants.
+
+        When occupied: block sun for comfort (against glare/sunlight).
+        Temperature (summer/winter) is IGNORED in this mode.
+        """
+        if self._has_actual_sun():
+            self.cover.logger.debug(
+                "t_w_p(): Actual sun exists, calculating blocking angle"
+            )
             return super().get_state()
-        return 80 / degrees * 100
+
+        self.cover.logger.debug("t_w_p(): No actual sun, using default")
+        return self.cover.default
 
     def tilt_without_presence(self, degrees: int) -> int:
-        """Determine state for tilted blinds without occupants."""
-        beta = np.rad2deg(self.cover.beta)
-        if self.cover.valid:
-            if self.climate_data.is_summer:
-                # block out all light in summer
-                return 0
-            if self.climate_data.is_winter and self.cover.mode == "mode2":
-                # parallel to sun beams, not possible with single direction
-                return (beta + 90) / degrees * 100
-            return 80 / degrees * 100
+        """Determine state for tilted blinds without occupants.
+
+        When not occupied: optimize temperature based on actual sunlight.
+        - Summer: fully closed (0) to block heat
+        - Winter mode2: parallel to sun beams for max heat gain
+        - Winter mode1: fully open (100) to let heat in
+        - Intermediate: calculated position
+        """
+        if not self._has_actual_sun():
+            self.cover.logger.debug("t_wo_p(): No actual sun, using default")
+            return self.cover.default
+
+        # Actual sun exists - optimize by temperature
+        if self.climate_data.is_summer:
+            self.cover.logger.debug("t_wo_p(): Summer + actual sun, closing (0)")
+            return 0
+
+        if self.climate_data.is_winter:
+            if self.cover.mode == "mode2":
+                # Bi-directional: parallel to sun beams for max heat
+                beta = np.rad2deg(self.cover.beta)
+                tilt = (beta + 90) / degrees * 100
+                self.cover.logger.debug(
+                    "t_wo_p(): Winter mode2, parallel to sun (%s)", tilt
+                )
+                return tilt
+            # Single direction: fully open
+            self.cover.logger.debug("t_wo_p(): Winter mode1, opening (100)")
+            return 100
+
+        self.cover.logger.debug("t_wo_p(): Intermediate temp, using calculated")
         return super().get_state()
 
     def tilt_state(self):

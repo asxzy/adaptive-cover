@@ -47,7 +47,25 @@ async def async_setup_entry(
         BinarySensorDeviceClass.RUNNING,
         coordinator,
     )
-    async_add_entities([binary_sensor, manual_override])
+    is_presence = AdaptiveCoverBinarySensor(
+        config_entry,
+        config_entry.entry_id,
+        "Room Occupied",
+        False,
+        "is_presence",
+        BinarySensorDeviceClass.OCCUPANCY,
+        coordinator,
+    )
+    has_direct_sun = AdaptiveCoverBinarySensor(
+        config_entry,
+        config_entry.entry_id,
+        "Weather Has Direct Sun",
+        False,
+        "has_direct_sun",
+        BinarySensorDeviceClass.LIGHT,
+        coordinator,
+    )
+    async_add_entities([binary_sensor, manual_override, is_presence, has_direct_sun])
 
 
 class AdaptiveCoverBinarySensor(

@@ -284,14 +284,23 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         # Update manager with covers
         self._update_manager_and_covers()
 
+        # Always create climate data for is_presence and has_direct_sun sensors
+        climate = ClimateCoverData(*self.get_climate_data(options))
+        # Compute values once and store them
+        self._is_presence = climate.is_presence
+        self._has_direct_sun = climate.has_direct_sun
+        # Set overrides so calculation uses the same values as the sensors
+        climate._is_presence_override = self._is_presence
+        climate._has_direct_sun_override = self._has_direct_sun
+
         # Access climate data if climate mode is enabled
         if self._climate_mode:
-            self.climate_mode_data(options, cover_data)
+            self.climate_mode_data(cover_data, climate)
         else:
             self.logger.debug("Control method is %s", self.control_method)
 
-        # calculate the state of the cover
-        self.normal_cover_state = NormalCoverState(cover_data)
+        # calculate the state of the cover (pass weather check for basic mode)
+        self.normal_cover_state = NormalCoverState(cover_data, self._has_direct_sun)
         self.logger.debug(
             "Determined normal cover state to be %s", self.normal_cover_state
         )
@@ -344,6 +353,8 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 "sun_motion": normal_cover.valid,
                 "manual_override": self.manager.binary_cover_manual,
                 "manual_list": self.manager.manual_controlled,
+                "is_presence": self._is_presence,
+                "has_direct_sun": self._has_direct_sun,
             },
             attributes={
                 "default": options.get(CONF_DEFAULT_HEIGHT),
@@ -676,9 +687,8 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             self._irradiance_toggle,
         ]
 
-    def climate_mode_data(self, options, cover_data):
+    def climate_mode_data(self, cover_data, climate):
         """Update climate mode data and control method."""
-        climate = ClimateCoverData(*self.get_climate_data(options))
         self.climate_state = round(ClimateCoverState(cover_data, climate).get_state())
         climate_data = ClimateCoverState(cover_data, climate).climate_data
         if climate_data.is_summer and self.switch_mode:
