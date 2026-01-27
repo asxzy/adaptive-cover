@@ -5,6 +5,23 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.components.weather import (
+    ATTR_CONDITION_CLEAR_NIGHT,
+    ATTR_CONDITION_CLOUDY,
+    ATTR_CONDITION_EXCEPTIONAL,
+    ATTR_CONDITION_FOG,
+    ATTR_CONDITION_HAIL,
+    ATTR_CONDITION_LIGHTNING,
+    ATTR_CONDITION_LIGHTNING_RAINY,
+    ATTR_CONDITION_PARTLYCLOUDY,
+    ATTR_CONDITION_POURING,
+    ATTR_CONDITION_RAINY,
+    ATTR_CONDITION_SNOWY,
+    ATTR_CONDITION_SNOWY_RAINY,
+    ATTR_CONDITION_SUNNY,
+    ATTR_CONDITION_WINDY,
+    ATTR_CONDITION_WINDY_VARIANT,
+)
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -293,28 +310,28 @@ CLIMATE_OPTIONS = vol.Schema(
 WEATHER_OPTIONS = vol.Schema(
     {
         vol.Optional(
-            CONF_WEATHER_STATE, default=["sunny", "partlycloudy", "cloudy", "clear"]
+            CONF_WEATHER_STATE,
+            default=[ATTR_CONDITION_SUNNY, ATTR_CONDITION_PARTLYCLOUDY],
         ): selector.SelectSelector(
             selector.SelectSelectorConfig(
                 multiple=True,
                 sort=False,
                 options=[
-                    "clear-night",
-                    "clear",
-                    "cloudy",
-                    "fog",
-                    "hail",
-                    "lightning",
-                    "lightning-rainy",
-                    "partlycloudy",
-                    "pouring",
-                    "rainy",
-                    "snowy",
-                    "snowy-rainy",
-                    "sunny",
-                    "windy",
-                    "windy-variant",
-                    "exceptional",
+                    ATTR_CONDITION_SUNNY,
+                    ATTR_CONDITION_PARTLYCLOUDY,
+                    ATTR_CONDITION_CLEAR_NIGHT,
+                    ATTR_CONDITION_CLOUDY,
+                    ATTR_CONDITION_FOG,
+                    ATTR_CONDITION_HAIL,
+                    ATTR_CONDITION_LIGHTNING,
+                    ATTR_CONDITION_LIGHTNING_RAINY,
+                    ATTR_CONDITION_POURING,
+                    ATTR_CONDITION_RAINY,
+                    ATTR_CONDITION_SNOWY,
+                    ATTR_CONDITION_SNOWY_RAINY,
+                    ATTR_CONDITION_WINDY,
+                    ATTR_CONDITION_WINDY_VARIANT,
+                    ATTR_CONDITION_EXCEPTIONAL,
                 ],
             )
         )
