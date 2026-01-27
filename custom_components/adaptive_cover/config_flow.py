@@ -311,7 +311,16 @@ WEATHER_OPTIONS = vol.Schema(
     {
         vol.Optional(
             CONF_WEATHER_STATE,
-            default=[ATTR_CONDITION_SUNNY, ATTR_CONDITION_PARTLYCLOUDY],
+            default=[
+                ATTR_CONDITION_SUNNY,
+                ATTR_CONDITION_PARTLYCLOUDY,
+                ATTR_CONDITION_CLOUDY,
+                ATTR_CONDITION_CLEAR_NIGHT,
+                ATTR_CONDITION_WINDY,
+                ATTR_CONDITION_WINDY_VARIANT,
+                ATTR_CONDITION_RAINY,
+                ATTR_CONDITION_SNOWY,
+            ],
         ): selector.SelectSelector(
             selector.SelectSelectorConfig(
                 multiple=True,
