@@ -113,9 +113,22 @@ class AdaptiveCoverBinarySensor(
         return f"{self._binary_name} {self._name}"
 
     @property
-    def is_on(self) -> bool:
+    def is_on(self) -> bool | None:
         """Return true if the binary sensor is on."""
         return self.coordinator.data.states[self._key]
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        # Check if coordinator is available first
+        if not super().available:
+            return False
+        # For sensors that depend on external entities, check availability status
+        if self._key == "has_direct_sun":
+            return self.coordinator.data.states.get("has_direct_sun_available", True)
+        if self._key == "is_presence":
+            return self.coordinator.data.states.get("is_presence_available", True)
+        return True
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:  # noqa: D102

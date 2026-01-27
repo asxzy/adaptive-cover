@@ -23,6 +23,7 @@ from homeassistant.core import (
     callback,
 )
 from homeassistant.helpers.event import async_track_point_in_time
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.template import state_attr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
@@ -103,6 +104,10 @@ from .const import (
 )
 from .helpers import get_datetime_from_str, get_last_updated, get_safe_state
 
+# Storage constants for persisting last known sensor values
+STORAGE_VERSION = 1
+STORAGE_KEY_PREFIX = "adaptive_cover"
+
 
 @dataclass
 class StateChangedData:
@@ -171,11 +176,126 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
         self._cached_options = None
 
+        # Last known sensor values for graceful degradation
+        # These are persisted across HA restarts
+        self._last_known: dict[str, bool | None] = {
+            "has_direct_sun": None,
+            "is_presence": None,
+            "lux": None,
+            "irradiance": None,
+        }
+        # Current availability status (True = available, False = using cached)
+        self._sensor_available: dict[str, bool] = {
+            "has_direct_sun": True,
+            "is_presence": True,
+        }
+        self._store = Store(
+            hass,
+            STORAGE_VERSION,
+            f"{STORAGE_KEY_PREFIX}.{self.config_entry.entry_id}",
+        )
+
     async def async_config_entry_first_refresh(self) -> None:
         """Config entry first refresh."""
         self.first_refresh = True
+        # Load last known sensor values from storage
+        await self._async_load_last_known()
         await super().async_config_entry_first_refresh()
         self.logger.debug("Config entry first refresh")
+
+    async def _async_load_last_known(self) -> None:
+        """Load last known sensor values from storage."""
+        data = await self._store.async_load()
+        if data:
+            self._last_known.update(data)
+            self.logger.debug("Loaded last known values from storage: %s", data)
+
+    async def _async_save_last_known(self) -> None:
+        """Save last known sensor values to storage."""
+        await self._store.async_save(self._last_known)
+        self.logger.debug("Saved last known values to storage: %s", self._last_known)
+
+    async def _get_sensor_values_with_fallback(
+        self, climate: ClimateCoverData
+    ) -> tuple[bool | None, bool | None, bool | None, bool | None]:
+        """Get sensor values with fallback to last known values.
+
+        For each sensor:
+        - If current value is available (not None), use it and update last known
+        - If current value is unavailable (None), use last known value
+
+        Returns:
+            Tuple of (is_presence, has_direct_sun, lux, irradiance) values.
+
+        """
+        values_changed = False
+
+        # Handle is_presence
+        current_presence = climate.is_presence
+        if current_presence is not None:
+            # Sensor available - use current and update last known
+            self._sensor_available["is_presence"] = True
+            if self._last_known["is_presence"] != current_presence:
+                self._last_known["is_presence"] = current_presence
+                values_changed = True
+            is_presence = current_presence
+        else:
+            # Sensor unavailable - use last known (may still be None if never available)
+            self._sensor_available["is_presence"] = False
+            is_presence = self._last_known["is_presence"]
+            self.logger.debug(
+                "Presence sensor unavailable, using last known: %s", is_presence
+            )
+
+        # Handle has_direct_sun
+        current_sun = climate.has_direct_sun
+        if current_sun is not None:
+            # Sensor available - use current and update last known
+            self._sensor_available["has_direct_sun"] = True
+            if self._last_known["has_direct_sun"] != current_sun:
+                self._last_known["has_direct_sun"] = current_sun
+                values_changed = True
+            has_direct_sun = current_sun
+        else:
+            # Sensor unavailable - use last known (may still be None if never available)
+            self._sensor_available["has_direct_sun"] = False
+            has_direct_sun = self._last_known["has_direct_sun"]
+            self.logger.debug(
+                "Weather sensor unavailable, using last known: %s", has_direct_sun
+            )
+
+        # Handle lux (used indirectly via climate_data.lux in _has_actual_sun)
+        current_lux = climate.lux
+        if current_lux is not None:
+            if self._last_known["lux"] != current_lux:
+                self._last_known["lux"] = current_lux
+                values_changed = True
+            lux_value = current_lux
+        else:
+            lux_value = self._last_known["lux"]
+            self.logger.debug(
+                "Lux sensor unavailable, using last known: %s", lux_value
+            )
+
+        # Handle irradiance
+        current_irradiance = climate.irradiance
+        if current_irradiance is not None:
+            if self._last_known["irradiance"] != current_irradiance:
+                self._last_known["irradiance"] = current_irradiance
+                values_changed = True
+            irradiance_value = current_irradiance
+        else:
+            irradiance_value = self._last_known["irradiance"]
+            self.logger.debug(
+                "Irradiance sensor unavailable, using last known: %s",
+                irradiance_value,
+            )
+
+        # Save to storage if any value changed
+        if values_changed:
+            await self._async_save_last_known()
+
+        return is_presence, has_direct_sun, lux_value, irradiance_value
 
     async def async_timed_refresh(self, event) -> None:
         """Control state at end time."""
@@ -286,12 +406,25 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
         # Always create climate data for is_presence and has_direct_sun sensors
         climate = ClimateCoverData(*self.get_climate_data(options))
-        # Compute values once and store them
-        self._is_presence = climate.is_presence
-        self._has_direct_sun = climate.has_direct_sun
+
+        # Get current sensor values and apply graceful degradation
+        # If sensor is unavailable (None), use last known value
+        (
+            self._is_presence,
+            self._has_direct_sun,
+            lux_value,
+            irradiance_value,
+        ) = await self._get_sensor_values_with_fallback(climate)
+
         # Set overrides so calculation uses the same values as the sensors
         climate._is_presence_override = self._is_presence
         climate._has_direct_sun_override = self._has_direct_sun
+        # Only set lux/irradiance overrides if we're using a fallback value
+        # (i.e., current sensor is unavailable but we have a last known value)
+        if climate.lux is None and lux_value is not None:
+            climate._lux_override = lux_value
+        if climate.irradiance is None and irradiance_value is not None:
+            climate._irradiance_override = irradiance_value
 
         # Access climate data if climate mode is enabled
         if self._climate_mode:
@@ -357,6 +490,8 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 "manual_list": self.manager.manual_controlled,
                 "is_presence": self._is_presence,
                 "has_direct_sun": self._has_direct_sun,
+                "is_presence_available": self._sensor_available["is_presence"],
+                "has_direct_sun_available": self._sensor_available["has_direct_sun"],
             },
             attributes={
                 "default": options.get(CONF_DEFAULT_HEIGHT),

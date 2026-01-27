@@ -288,8 +288,12 @@ class ClimateCoverData:
     _use_lux: bool
     _use_irradiance: bool
     # Override fields - when set, these values are used instead of computing from entities
+    # None means "not overridden" - compute from entity
+    # True/False means "use this value" (either current or last known)
     _is_presence_override: bool | None = None
     _has_direct_sun_override: bool | None = None
+    _lux_override: bool | None = None
+    _irradiance_override: bool | None = None
 
     @property
     def outside_temperature(self):
@@ -327,23 +331,35 @@ class ClimateCoverData:
             return float(self.inside_temperature)
 
     @property
-    def is_presence(self):
-        """Checks if people are present."""
+    def is_presence(self) -> bool | None:
+        """Check if people are present.
+
+        Returns:
+            True: Room is occupied
+            False: Room is not occupied
+            None: Presence entity unavailable
+
+        """
         # Use override if set (from coordinator's stored value)
         if self._is_presence_override is not None:
             return self._is_presence_override
-        presence = None
-        if self.presence_entity is not None:
-            presence = get_safe_state(self.hass, self.presence_entity)
-        # set to true if no sensor is defined
-        if presence is not None:
-            domain = get_domain(self.presence_entity)
-            if domain == "device_tracker":
-                return presence == "home"
-            if domain == "zone":
-                return int(presence) > 0
-            if domain in ["binary_sensor", "input_boolean"]:
-                return presence == "on"
+        # No presence entity configured → assume occupied
+        if self.presence_entity is None:
+            return True
+        presence = get_safe_state(self.hass, self.presence_entity)
+        # Handle unavailable presence entity
+        if presence is None:
+            self.logger.debug(
+                "is_presence(): Presence entity unavailable, returning None"
+            )
+            return None
+        domain = get_domain(self.presence_entity)
+        if domain == "device_tracker":
+            return presence == "home"
+        if domain == "zone":
+            return int(presence) > 0
+        if domain in ["binary_sensor", "input_boolean"]:
+            return presence == "on"
         return True
 
     @property
@@ -390,8 +406,15 @@ class ClimateCoverData:
         return is_it
 
     @property
-    def has_direct_sun(self) -> bool:
-        """Check if weather condition allows direct sunlight."""
+    def has_direct_sun(self) -> bool | None:
+        """Check if weather condition allows direct sunlight.
+
+        Returns:
+            True: Weather allows direct sun
+            False: Weather does not allow direct sun
+            None: Weather entity unavailable (unknown state)
+
+        """
         # Use override if set (from coordinator's stored value)
         if self._has_direct_sun_override is not None:
             return self._has_direct_sun_override
@@ -400,12 +423,16 @@ class ClimateCoverData:
             self.weather_condition,
             type(self.weather_condition).__name__,
         )
-        weather_state = None
-        if self.weather_entity is not None:
-            weather_state = get_safe_state(self.hass, self.weather_entity)
-        else:
+        if self.weather_entity is None:
             self.logger.debug("has_direct_sun(): No weather entity defined")
             return True
+        weather_state = get_safe_state(self.hass, self.weather_entity)
+        # Handle unavailable weather entity
+        if weather_state is None:
+            self.logger.debug(
+                "has_direct_sun(): Weather entity unavailable, returning None"
+            )
+            return None
         # Use configured conditions or default
         conditions = self.weather_condition
         if not conditions:
@@ -423,24 +450,52 @@ class ClimateCoverData:
         return matches
 
     @property
-    def lux(self) -> bool:
-        """Get lux value and compare to threshold."""
+    def lux(self) -> bool | None:
+        """Get lux value and compare to threshold.
+
+        Returns:
+            True: Lux is below threshold (no actual sun)
+            False: Lux is above threshold (has sun) or not configured
+            None: Lux entity unavailable
+
+        """
+        # Use override if set (for graceful degradation with last known value)
+        if self._lux_override is not None:
+            return self._lux_override
         if not self._use_lux:
             return False
-        if self.lux_entity is not None and self.lux_threshold is not None:
-            value = get_safe_state(self.hass, self.lux_entity)
-            return float(value) <= self.lux_threshold
-        return False
+        if self.lux_entity is None or self.lux_threshold is None:
+            return False
+        value = get_safe_state(self.hass, self.lux_entity)
+        if value is None:
+            self.logger.debug("lux(): Lux entity unavailable, returning None")
+            return None
+        return float(value) <= self.lux_threshold
 
     @property
-    def irradiance(self) -> bool:
-        """Get irradiance value and compare to threshold."""
+    def irradiance(self) -> bool | None:
+        """Get irradiance value and compare to threshold.
+
+        Returns:
+            True: Irradiance is below threshold (no actual sun)
+            False: Irradiance is above threshold (has sun) or not configured
+            None: Irradiance entity unavailable
+
+        """
+        # Use override if set (for graceful degradation with last known value)
+        if self._irradiance_override is not None:
+            return self._irradiance_override
         if not self._use_irradiance:
             return False
-        if self.irradiance_entity is not None and self.irradiance_threshold is not None:
-            value = get_safe_state(self.hass, self.irradiance_entity)
-            return float(value) <= self.irradiance_threshold
-        return False
+        if self.irradiance_entity is None or self.irradiance_threshold is None:
+            return False
+        value = get_safe_state(self.hass, self.irradiance_entity)
+        if value is None:
+            self.logger.debug(
+                "irradiance(): Irradiance entity unavailable, returning None"
+            )
+            return None
+        return float(value) <= self.irradiance_threshold
 
 
 @dataclass
@@ -466,14 +521,33 @@ class ClimateCoverState(NormalCoverState):
             self.cover.logger.debug("_has_actual_sun: No - sun not in valid position")
             return False
 
-        # Check 2: Weather condition
-        if not self.climate_data.has_direct_sun:
+        # Check 2: Weather condition (None = unavailable, treated as no sun for safety)
+        has_sun = self.climate_data.has_direct_sun
+        if has_sun is None:
+            self.cover.logger.debug(
+                "_has_actual_sun: No - weather unavailable, assuming no direct sun"
+            )
+            return False
+        if not has_sun:
             self.cover.logger.debug("_has_actual_sun: No - weather says no direct sun")
             return False
 
         # Check 3: Lux/irradiance override (if configured and enabled)
         # These return True when reading is BELOW threshold (meaning no actual sun)
-        if self.climate_data.lux or self.climate_data.irradiance:
+        # None means sensor unavailable - treat as no override (trust weather)
+        lux_check = self.climate_data.lux
+        irradiance_check = self.climate_data.irradiance
+        if lux_check is None:
+            self.cover.logger.debug(
+                "_has_actual_sun: Lux sensor unavailable, ignoring lux check"
+            )
+            lux_check = False
+        if irradiance_check is None:
+            self.cover.logger.debug(
+                "_has_actual_sun: Irradiance sensor unavailable, ignoring irradiance"
+            )
+            irradiance_check = False
+        if lux_check or irradiance_check:
             self.cover.logger.debug(
                 "_has_actual_sun: No - lux/irradiance below threshold"
             )
@@ -484,10 +558,17 @@ class ClimateCoverState(NormalCoverState):
 
     def normal_type_cover(self) -> int:
         """Determine state for horizontal and vertical covers."""
+        is_presence = self.climate_data.is_presence
+        self.cover.logger.debug("Is presence? %s", is_presence)
 
-        self.cover.logger.debug("Is presence? %s", self.climate_data.is_presence)
+        # None means presence entity unavailable - assume occupied for safety
+        if is_presence is None:
+            self.cover.logger.debug(
+                "Presence unavailable, assuming occupied for comfort"
+            )
+            is_presence = True
 
-        if self.climate_data.is_presence:
+        if is_presence:
             return self.normal_with_presence()
 
         return self.normal_without_presence()
@@ -585,7 +666,16 @@ class ClimateCoverState(NormalCoverState):
         degrees = 90
         if self.cover.mode == "mode2":
             degrees = 180
-        if self.climate_data.is_presence:
+
+        is_presence = self.climate_data.is_presence
+        # None means presence entity unavailable - assume occupied for safety
+        if is_presence is None:
+            self.cover.logger.debug(
+                "tilt_state: Presence unavailable, assuming occupied for comfort"
+            )
+            is_presence = True
+
+        if is_presence:
             return self.tilt_with_presence(degrees)
         return self.tilt_without_presence(degrees)
 
