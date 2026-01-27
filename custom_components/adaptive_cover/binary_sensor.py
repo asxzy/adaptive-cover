@@ -134,3 +134,24 @@ class AdaptiveCoverBinarySensor(
     def extra_state_attributes(self) -> Mapping[str, Any] | None:  # noqa: D102
         if self._key == "manual_override":
             return {"manual_controlled": self.coordinator.data.states["manual_list"]}
+        if self._key == "has_direct_sun":
+            return {
+                "sensor_available": self.coordinator.data.states.get(
+                    "has_direct_sun_available"
+                ),
+                "using_last_known": not self.coordinator.data.states.get(
+                    "has_direct_sun_available", True
+                ),
+                "current_value": self.coordinator.data.states.get("has_direct_sun"),
+            }
+        if self._key == "is_presence":
+            return {
+                "sensor_available": self.coordinator.data.states.get(
+                    "is_presence_available"
+                ),
+                "using_last_known": not self.coordinator.data.states.get(
+                    "is_presence_available", True
+                ),
+                "current_value": self.coordinator.data.states.get("is_presence"),
+            }
+        return None

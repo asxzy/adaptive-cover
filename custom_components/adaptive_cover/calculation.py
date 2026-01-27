@@ -287,11 +287,12 @@ class ClimateCoverData:
     temp_summer_outside: float
     _use_lux: bool
     _use_irradiance: bool
-    # Override fields - when set, these values are used instead of computing from entities
-    # None means "not overridden" - compute from entity
-    # True/False means "use this value" (either current or last known)
-    _is_presence_override: bool | None = None
-    _has_direct_sun_override: bool | None = None
+    # Override fields - when set to a tuple, these values are used instead of computing
+    # from entities. The tuple format is (use_override: bool, value: bool | None).
+    # None means "not overridden" - compute from entity.
+    # (True, value) means "use this value" (either current or last known).
+    _is_presence_override: tuple[bool, bool | None] | None = None
+    _has_direct_sun_override: tuple[bool, bool | None] | None = None
     _lux_override: bool | None = None
     _irradiance_override: bool | None = None
 
@@ -341,8 +342,15 @@ class ClimateCoverData:
 
         """
         # Use override if set (from coordinator's stored value)
+        # Override is a tuple (use_override: bool, value: bool | None)
         if self._is_presence_override is not None:
-            return self._is_presence_override
+            use_override, value = self._is_presence_override
+            if use_override:
+                self.logger.debug(
+                    "is_presence(): Using override value: %s",
+                    value,
+                )
+                return value
         # No presence entity configured → assume occupied
         if self.presence_entity is None:
             return True
@@ -416,8 +424,15 @@ class ClimateCoverData:
 
         """
         # Use override if set (from coordinator's stored value)
+        # Override is a tuple (use_override: bool, value: bool | None)
         if self._has_direct_sun_override is not None:
-            return self._has_direct_sun_override
+            use_override, value = self._has_direct_sun_override
+            if use_override:
+                self.logger.debug(
+                    "has_direct_sun(): Using override value: %s",
+                    value,
+                )
+                return value
         self.logger.debug(
             "has_direct_sun(): weather_condition=%s (type=%s)",
             self.weather_condition,
@@ -426,11 +441,19 @@ class ClimateCoverData:
         if self.weather_entity is None:
             self.logger.debug("has_direct_sun(): No weather entity defined")
             return True
+        # Get raw state for debugging
+        raw_state = self.hass.states.get(self.weather_entity)
+        self.logger.debug(
+            "has_direct_sun(): Raw weather state: %s (available: %s)",
+            raw_state.state if raw_state else "None",
+            raw_state is not None,
+        )
         weather_state = get_safe_state(self.hass, self.weather_entity)
         # Handle unavailable weather entity
         if weather_state is None:
             self.logger.debug(
-                "has_direct_sun(): Weather entity unavailable, returning None"
+                "has_direct_sun(): Weather entity unavailable (state=%s), returning None",
+                raw_state.state if raw_state else "no state object",
             )
             return None
         # Use configured conditions or default

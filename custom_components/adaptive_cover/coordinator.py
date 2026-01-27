@@ -232,6 +232,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
         # Handle is_presence
         current_presence = climate.is_presence
+        self.logger.debug(
+            "Sensor fallback: is_presence current=%s, last_known=%s",
+            current_presence,
+            self._last_known["is_presence"],
+        )
         if current_presence is not None:
             # Sensor available - use current and update last known
             self._sensor_available["is_presence"] = True
@@ -249,6 +254,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
         # Handle has_direct_sun
         current_sun = climate.has_direct_sun
+        self.logger.debug(
+            "Sensor fallback: has_direct_sun current=%s, last_known=%s",
+            current_sun,
+            self._last_known["has_direct_sun"],
+        )
         if current_sun is not None:
             # Sensor available - use current and update last known
             self._sensor_available["has_direct_sun"] = True
@@ -417,8 +427,16 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         ) = await self._get_sensor_values_with_fallback(climate)
 
         # Set overrides so calculation uses the same values as the sensors
-        climate._is_presence_override = self._is_presence
-        climate._has_direct_sun_override = self._has_direct_sun
+        # Override format is (use_override: bool, value: bool | None)
+        # We ALWAYS set use_override=True so the calculation uses our value
+        # (which may be current or last known, determined by _get_sensor_values_with_fallback)
+        climate._is_presence_override = (True, self._is_presence)
+        climate._has_direct_sun_override = (True, self._has_direct_sun)
+        self.logger.debug(
+            "Set overrides: is_presence=%s, has_direct_sun=%s",
+            self._is_presence,
+            self._has_direct_sun,
+        )
         # Only set lux/irradiance overrides if we're using a fallback value
         # (i.e., current sensor is unavailable but we have a last known value)
         if climate.lux is None and lux_value is not None:
