@@ -554,6 +554,21 @@ class ClimateCoverData:
             return None
         return float(value) > self.cloud_threshold
 
+    @property
+    def cloud_value(self) -> float | None:
+        """Get raw cloud coverage percentage value.
+
+        Returns:
+            The cloud coverage percentage (0-100) or None if unavailable.
+
+        """
+        if self.cloud_entity is None:
+            return None
+        value = get_safe_state(self.hass, self.cloud_entity)
+        if value is None:
+            return None
+        return float(value)
+
 
 @dataclass
 class ClimateCoverState(NormalCoverState):

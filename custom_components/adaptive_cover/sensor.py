@@ -19,6 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    CONF_CLOUD_ENTITY,
     CONF_SENSOR_TYPE,
     DOMAIN,
 )
@@ -63,7 +64,17 @@ async def async_setup_entry(
     control = AdaptiveCoverControlSensorEntity(
         config_entry.entry_id, hass, config_entry, name, coordinator
     )
-    async_add_entities([sensor, start, end, control])
+    entities = [sensor, start, end, control]
+
+    # Add cloud coverage sensor if cloud entity is configured
+    cloud_entity = config_entry.options.get(CONF_CLOUD_ENTITY)
+    if cloud_entity:
+        cloud_sensor = AdaptiveCoverCloudSensorEntity(
+            config_entry.entry_id, hass, config_entry, name, coordinator
+        )
+        entities.append(cloud_sensor)
+
+    async_add_entities(entities)
 
 
 class AdaptiveCoverSensorEntity(
@@ -249,6 +260,68 @@ class AdaptiveCoverControlSensorEntity(
     def native_value(self) -> str | None:
         """Handle when entity is added."""
         return self.data.states["control"]
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        return DeviceInfo(
+            entry_type=DeviceEntryType.SERVICE,
+            identifiers={(DOMAIN, self._device_id)},
+            name=self._device_name,
+        )
+
+
+class AdaptiveCoverCloudSensorEntity(
+    CoordinatorEntity[AdaptiveDataUpdateCoordinator], SensorEntity
+):
+    """Adaptive Cover Cloud Coverage Sensor."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_icon = "mdi:weather-cloudy"
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        unique_id: str,
+        hass,
+        config_entry,
+        name: str,
+        coordinator: AdaptiveDataUpdateCoordinator,
+    ) -> None:
+        """Initialize adaptive_cover Cloud Sensor."""
+        super().__init__(coordinator=coordinator)
+        self.type = {
+            "cover_blind": "Vertical",
+            "cover_awning": "Horizontal",
+            "cover_tilt": "Tilt",
+        }
+        self.coordinator = coordinator
+        self.data = self.coordinator.data
+        self._sensor_name = "Cloud Coverage"
+        self._attr_unique_id = f"{unique_id}_{self._sensor_name}"
+        self._device_id = unique_id
+        self.hass = hass
+        self.config_entry = config_entry
+        self._name = name
+        self._device_name = self.type[self.config_entry.data[CONF_SENSOR_TYPE]]
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.data = self.coordinator.data
+        self.async_write_ha_state()
+
+    @property
+    def name(self):
+        """Name of the entity."""
+        return f"{self._sensor_name} {self._name}"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the cloud coverage percentage."""
+        return self.data.states.get("cloud_coverage")
 
     @property
     def device_info(self) -> DeviceInfo:

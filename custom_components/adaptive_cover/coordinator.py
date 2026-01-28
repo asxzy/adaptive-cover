@@ -444,12 +444,19 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             cloud_value,
         ) = await self._get_sensor_values_with_fallback(climate)
 
+        # Store raw cloud coverage value for sensor display
+        self._cloud_coverage_value = climate.cloud_value
+
         # Set overrides so calculation uses the same values as the sensors
         # Override format is (use_override: bool, value: bool | None)
         # We ALWAYS set use_override=True so the calculation uses our value
         # (which may be current or last known, determined by _get_sensor_values_with_fallback)
         climate._is_presence_override = (True, self._is_presence)
-        climate._has_direct_sun_override = (True, self._has_direct_sun)
+        # When weather toggle is disabled, default to "has light" (True) to encourage calculated position
+        climate._has_direct_sun_override = (
+            True,
+            self._has_direct_sun if self._weather_toggle else True,
+        )
         self.logger.debug(
             "Set overrides: is_presence=%s, has_direct_sun=%s",
             self._is_presence,
@@ -478,7 +485,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
         self.default_state = round(
             self.normal_cover_state.get_state(
-                has_direct_sun=self._has_direct_sun if self._weather_toggle else None,
+                has_direct_sun=self._has_direct_sun if self._weather_toggle else True,
                 cloud_override=climate.cloud if self._cloud_toggle else None,
             )
         )
@@ -533,6 +540,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 "has_direct_sun": self._has_direct_sun,
                 "is_presence_available": self._sensor_available["is_presence"],
                 "has_direct_sun_available": self._sensor_available["has_direct_sun"],
+                "cloud_coverage": self._cloud_coverage_value,
             },
             attributes={
                 "default": options.get(CONF_DEFAULT_HEIGHT),
