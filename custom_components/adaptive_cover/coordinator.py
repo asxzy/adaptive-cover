@@ -679,6 +679,28 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             self.logger.debug("Run %s with data %s", service, service_data)
             await self.hass.services.async_call(COVER_DOMAIN, service, service_data)
 
+    async def async_force_update_covers(self):
+        """Force update all covers to the calculated position immediately.
+
+        This bypasses the normal delta checks and sends the position command right away.
+        """
+        if not self.is_control_enabled:
+            self.logger.info("Force update skipped: control mode is disabled")
+            return
+
+        # Refresh to get the latest calculated position
+        await self.async_refresh()
+
+        # Get the current calculated state
+        state = self.state
+        self.logger.info("Force updating covers to position: %s", state)
+
+        # Send position to all covers, bypassing delta checks
+        for cover in self.entities:
+            await self.async_set_position(cover, state)
+
+        self.logger.info("Force update completed")
+
     def _update_options(self, options):
         """Update options."""
         self.entities = options.get(CONF_ENTITIES, [])
