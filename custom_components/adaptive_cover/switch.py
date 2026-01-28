@@ -157,6 +157,7 @@ class AdaptiveCoverSwitch(
         self.coordinator.logger.debug("Turning on %s", self._key)
         self._attr_is_on = True
         setattr(self.coordinator, self._key, True)
+        self.coordinator.state_change = True
         await self.coordinator.async_refresh()
         self.schedule_update_ha_state()
 
@@ -165,6 +166,7 @@ class AdaptiveCoverSwitch(
         self.coordinator.logger.debug("Turning off %s", self._key)
         self._attr_is_on = False
         setattr(self.coordinator, self._key, False)
+        self.coordinator.state_change = True
         await self.coordinator.async_refresh()
         self.schedule_update_ha_state()
 

@@ -80,6 +80,7 @@ class ControlModeSelect(
         self.coordinator.logger.debug("Selecting control mode: %s", option)
         self._attr_current_option = option
         self.coordinator.control_mode = option
+        self.coordinator.state_change = True
         await self.coordinator.async_refresh()
         self.async_write_ha_state()
 
