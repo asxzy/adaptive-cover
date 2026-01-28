@@ -151,6 +151,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self._lux_toggle = None
         self._irradiance_toggle = None
         self._cloud_toggle = None
+        self._weather_toggle = None
         self._start_time = None
         self._sun_end_time = None
         self._sun_start_time = None
@@ -477,7 +478,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
         self.default_state = round(
             self.normal_cover_state.get_state(
-                has_direct_sun=self._has_direct_sun,
+                has_direct_sun=self._has_direct_sun if self._weather_toggle else None,
                 cloud_override=climate.cloud if self._cloud_toggle else None,
             )
         )
@@ -1012,6 +1013,15 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     @cloud_toggle.setter
     def cloud_toggle(self, value):
         self._cloud_toggle = value
+
+    @property
+    def weather_toggle(self):
+        """Toggle weather check."""
+        return self._weather_toggle
+
+    @weather_toggle.setter
+    def weather_toggle(self, value):
+        self._weather_toggle = value
 
 
 class AdaptiveCoverManager:

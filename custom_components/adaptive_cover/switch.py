@@ -93,6 +93,14 @@ async def async_setup_entry(
         "cloud_toggle",
         coordinator,
     )
+    weather_switch = AdaptiveCoverSwitch(
+        config_entry,
+        config_entry.entry_id,
+        "Weather",
+        True,
+        "weather_toggle",
+        coordinator,
+    )
 
     climate_mode = config_entry.options.get(CONF_CLIMATE_MODE)
     weather_entity = config_entry.options.get(CONF_WEATHER_ENTITY)
@@ -115,6 +123,8 @@ async def async_setup_entry(
             switches.append(irradiance_switch)
         if cloud_entity:
             switches.append(cloud_switch)
+        if weather_entity:
+            switches.append(weather_switch)
 
     async_add_entities(switches)
 
