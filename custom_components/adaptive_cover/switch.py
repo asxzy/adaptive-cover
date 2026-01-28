@@ -16,7 +16,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import (
     CONF_CLIMATE_MODE,
     CONF_CLOUD_ENTITY,
-    CONF_ENTITIES,
     CONF_IRRADIANCE_ENTITY,
     CONF_LUX_ENTITY,
     CONF_OUTSIDETEMP_ENTITY,
@@ -31,35 +30,12 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the demo switch platform."""
+    """Set up the switch platform."""
     coordinator: AdaptiveDataUpdateCoordinator = hass.data[DOMAIN][
         config_entry.entry_id
     ]
 
-    manual_switch = AdaptiveCoverSwitch(
-        config_entry,
-        config_entry.entry_id,
-        "Manual Override",
-        True,
-        "manual_toggle",
-        coordinator,
-    )
-    control_switch = AdaptiveCoverSwitch(
-        config_entry,
-        config_entry.entry_id,
-        "Toggle Control",
-        True,
-        "control_toggle",
-        coordinator,
-    )
-    climate_switch = AdaptiveCoverSwitch(
-        config_entry,
-        config_entry.entry_id,
-        "Climate Mode",
-        True,
-        "switch_mode",
-        coordinator,
-    )
+    # Sensor toggle switches (only functional in AUTO mode)
     temp_switch = AdaptiveCoverSwitch(
         config_entry,
         config_entry.entry_id,
@@ -109,11 +85,9 @@ async def async_setup_entry(
     cloud_entity = config_entry.options.get(CONF_CLOUD_ENTITY)
     switches = []
 
-    if len(config_entry.options.get(CONF_ENTITIES)) >= 1:
-        switches = [control_switch, manual_switch]
-
+    # Sensor toggles are shown if climate mode is enabled in config
+    # They only affect behavior when control mode is AUTO
     if climate_mode:
-        switches.append(climate_switch)
         if weather_entity or sensor_entity:
             switches.append(temp_switch)
         if lux_entity:
@@ -166,29 +140,17 @@ class AdaptiveCoverSwitch(
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
-        self.coordinator.logger.debug("Turning on")
+        self.coordinator.logger.debug("Turning on %s", self._key)
         self._attr_is_on = True
         setattr(self.coordinator, self._key, True)
-        if self._key == "control_toggle" and kwargs.get("added") is not True:
-            for entity in self.coordinator.entities:
-                if (
-                    not self.coordinator.manager.is_cover_manual(entity)
-                    and self.coordinator.check_adaptive_time
-                ):
-                    await self.coordinator.async_set_position(
-                        entity, self.coordinator.state
-                    )
         await self.coordinator.async_refresh()
         self.schedule_update_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the device off."""
-        self.coordinator.logger.debug("Turning off")
+        self.coordinator.logger.debug("Turning off %s", self._key)
         self._attr_is_on = False
         setattr(self.coordinator, self._key, False)
-        if self._key == "control_toggle" and kwargs.get("added") is not True:
-            for entity in self.coordinator.manager.manual_controlled:
-                self.coordinator.manager.reset(entity)
         await self.coordinator.async_refresh()
         self.schedule_update_ha_state()
 

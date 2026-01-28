@@ -38,15 +38,6 @@ async def async_setup_entry(
         BinarySensorDeviceClass.MOTION,
         coordinator,
     )
-    manual_override = AdaptiveCoverBinarySensor(
-        config_entry,
-        config_entry.entry_id,
-        "Manual Override",
-        False,
-        "manual_override",
-        BinarySensorDeviceClass.RUNNING,
-        coordinator,
-    )
     is_presence = AdaptiveCoverBinarySensor(
         config_entry,
         config_entry.entry_id,
@@ -65,7 +56,7 @@ async def async_setup_entry(
         BinarySensorDeviceClass.LIGHT,
         coordinator,
     )
-    async_add_entities([binary_sensor, manual_override, is_presence, has_direct_sun])
+    async_add_entities([binary_sensor, is_presence, has_direct_sun])
 
 
 class AdaptiveCoverBinarySensor(
@@ -121,8 +112,6 @@ class AdaptiveCoverBinarySensor(
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:  # noqa: D102
-        if self._key == "manual_override":
-            return {"manual_controlled": self.coordinator.data.states["manual_list"]}
         if self._key == "has_direct_sun":
             return {
                 "sensor_available": self.coordinator.data.states.get(

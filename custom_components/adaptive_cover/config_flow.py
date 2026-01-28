@@ -62,9 +62,8 @@ from .const import (
     CONF_LUX_ENTITY,
     CONF_LUX_THRESHOLD,
     CONF_MANUAL_IGNORE_INTERMEDIATE,
-    CONF_MANUAL_OVERRIDE_DURATION,
-    CONF_MANUAL_OVERRIDE_RESET,
     CONF_MANUAL_THRESHOLD,
+    CONF_RESET_AT_MIDNIGHT,
     CONF_MAX_ELEVATION,
     CONF_MAX_POSITION,
     CONF_MIN_ELEVATION,
@@ -372,14 +371,11 @@ AUTOMATION_CONFIG = vol.Schema(
         vol.Optional(CONF_START_ENTITY): selector.EntitySelector(
             selector.EntitySelectorConfig(domain=["sensor", "input_datetime"])
         ),
-        vol.Required(
-            CONF_MANUAL_OVERRIDE_DURATION, default={"minutes": 15}
-        ): selector.DurationSelector(),
-        vol.Required(CONF_MANUAL_OVERRIDE_RESET, default=False): bool,
         vol.Optional(CONF_MANUAL_THRESHOLD): vol.All(
             vol.Coerce(int), vol.Range(min=0, max=99)
         ),
         vol.Optional(CONF_MANUAL_IGNORE_INTERMEDIATE, default=False): bool,
+        vol.Required(CONF_RESET_AT_MIDNIGHT, default=True): bool,
         vol.Optional(CONF_END_TIME, default="00:00:00"): selector.TimeSelector(),
         vol.Optional(CONF_END_ENTITY): selector.EntitySelector(
             selector.EntitySelectorConfig(domain=["sensor", "input_datetime"])
@@ -648,11 +644,8 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
                 CONF_DELTA_TIME: self.config.get(CONF_DELTA_TIME),
                 CONF_START_TIME: self.config.get(CONF_START_TIME),
                 CONF_START_ENTITY: self.config.get(CONF_START_ENTITY),
-                CONF_MANUAL_OVERRIDE_DURATION: self.config.get(
-                    CONF_MANUAL_OVERRIDE_DURATION
-                ),
-                CONF_MANUAL_OVERRIDE_RESET: self.config.get(CONF_MANUAL_OVERRIDE_RESET),
                 CONF_MANUAL_THRESHOLD: self.config.get(CONF_MANUAL_THRESHOLD),
+                CONF_RESET_AT_MIDNIGHT: self.config.get(CONF_RESET_AT_MIDNIGHT, True),
                 CONF_MANUAL_IGNORE_INTERMEDIATE: self.config.get(
                     CONF_MANUAL_IGNORE_INTERMEDIATE
                 ),

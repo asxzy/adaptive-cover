@@ -73,10 +73,14 @@ CONF_START_ENTITY = "start_entity"
 CONF_END_TIME = "end_time"
 CONF_END_ENTITY = "end_entity"
 CONF_RETURN_SUNSET = "return_sunset"
-CONF_MANUAL_OVERRIDE_DURATION = "manual_override_duration"
-CONF_MANUAL_OVERRIDE_RESET = "manual_override_reset"
 CONF_MANUAL_THRESHOLD = "manual_threshold"
 CONF_MANUAL_IGNORE_INTERMEDIATE = "manual_ignore_intermediate"
+CONF_RESET_AT_MIDNIGHT = "reset_at_midnight"
+
+# Control mode constants
+CONTROL_MODE_OFF = "off"
+CONTROL_MODE_ON = "on"
+CONTROL_MODE_AUTO = "auto"
 
 STRATEGY_MODE_BASIC = "basic"
 STRATEGY_MODE_CLIMATE = "climate"
