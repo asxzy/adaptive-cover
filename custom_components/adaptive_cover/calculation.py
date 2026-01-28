@@ -9,7 +9,6 @@ import pandas as pd
 from homeassistant.components.weather import (
     ATTR_CONDITION_CLEAR_NIGHT,
     ATTR_CONDITION_PARTLYCLOUDY,
-    ATTR_CONDITION_RAINY,
     ATTR_CONDITION_SNOWY,
     ATTR_CONDITION_SUNNY,
     ATTR_CONDITION_WINDY,
@@ -223,12 +222,16 @@ class NormalCoverState:
 
     cover: AdaptiveGeneralCover
 
-    def get_state(self, has_direct_sun: bool | None = None) -> int:
+    def get_state(
+        self, has_direct_sun: bool | None = None, cloud_override: bool | None = None
+    ) -> int:
         """Return state.
 
         Args:
             has_direct_sun: Optional weather check. When set, only use calculated
                 position if weather allows direct sun. None means no weather check.
+            cloud_override: Optional cloud check. When True, it means too cloudy
+                and should use default position.
 
         """
         self.cover.logger.debug("Determining normal position")
@@ -241,16 +244,23 @@ class NormalCoverState:
         weather_allows_sun = has_direct_sun is None or has_direct_sun
         self.cover.logger.debug("Weather allows direct sun? %s", weather_allows_sun)
 
-        if dsv and weather_allows_sun:
+        # Check cloud coverage - if True, too cloudy for sun
+        cloud_blocks_sun = cloud_override is True
+        self.cover.logger.debug("Cloud blocks sun? %s", cloud_blocks_sun)
+
+        if dsv and weather_allows_sun and not cloud_blocks_sun:
             state = self.cover.calculate_percentage()
             self.cover.logger.debug(
-                "Yes sun in window & weather sunny: using calculated percentage (%s)",
+                "Yes sun in window & weather sunny & not too cloudy: "
+                "using calculated percentage (%s)",
                 state,
             )
         else:
             state = self.cover.default
             self.cover.logger.debug(
-                "No sun in window or weather cloudy: using default value (%s)", state
+                "No sun in window or weather cloudy or too cloudy: "
+                "using default value (%s)",
+                state,
             )
 
         result = np.clip(state, 0, 100)
@@ -284,6 +294,9 @@ class ClimateCoverData:
     temp_summer_outside: float
     _use_lux: bool
     _use_irradiance: bool
+    cloud_entity: str
+    cloud_threshold: int
+    _use_cloud: bool
     # Override fields - when set to a tuple, these values are used instead of computing
     # from entities. The tuple format is (use_override: bool, value: bool | None).
     # None means "not overridden" - compute from entity.
@@ -292,6 +305,7 @@ class ClimateCoverData:
     _has_direct_sun_override: tuple[bool, bool | None] | None = None
     _lux_override: bool | None = None
     _irradiance_override: bool | None = None
+    _cloud_override: bool | None = None
 
     @property
     def outside_temperature(self):
@@ -517,6 +531,29 @@ class ClimateCoverData:
             return None
         return float(value) <= self.irradiance_threshold
 
+    @property
+    def cloud(self) -> bool | None:
+        """Get cloud coverage value and compare to threshold.
+
+        Returns:
+            True: Cloud coverage is above threshold (too cloudy, no direct sun)
+            False: Cloud coverage is below threshold (has sun) or not configured
+            None: Cloud entity unavailable
+
+        """
+        # Use override if set (for graceful degradation with last known value)
+        if self._cloud_override is not None:
+            return self._cloud_override
+        if not self._use_cloud:
+            return False
+        if self.cloud_entity is None or self.cloud_threshold is None:
+            return False
+        value = get_safe_state(self.hass, self.cloud_entity)
+        if value is None:
+            self.logger.debug("cloud(): Cloud entity unavailable, returning None")
+            return None
+        return float(value) > self.cloud_threshold
+
 
 @dataclass
 class ClimateCoverState(NormalCoverState):
@@ -527,14 +564,18 @@ class ClimateCoverState(NormalCoverState):
     def _has_actual_sun(self) -> bool:
         """Check if there is actual direct sunlight.
 
-        Combines three checks:
+        Combines four checks:
         1. Sun geometry: direct_sun_valid (in front + not sunset + not blind spot)
         2. Weather: has_direct_sun (sunny, not cloudy)
         3. Lux/Irradiance: if configured AND enabled, reading must be >= threshold
+        4. Cloud coverage: if configured AND enabled, reading must be <= threshold
 
         Note on lux/irradiance:
         - self.climate_data.lux returns True if reading < threshold (no actual sun)
         - self.climate_data.irradiance returns True if reading < threshold (no actual sun)
+
+        Note on cloud:
+        - self.climate_data.cloud returns True if reading > threshold (too cloudy)
         """
         # Check 1: Sun geometry
         if not self.cover.direct_sun_valid:
@@ -570,6 +611,21 @@ class ClimateCoverState(NormalCoverState):
         if lux_check or irradiance_check:
             self.cover.logger.debug(
                 "_has_actual_sun: No - lux/irradiance below threshold"
+            )
+            return False
+
+        # Check 4: Cloud coverage (if configured and enabled)
+        # Returns True when reading is ABOVE threshold (meaning too cloudy, no sun)
+        # None means sensor unavailable - treat as no override (trust weather)
+        cloud_check = self.climate_data.cloud
+        if cloud_check is None:
+            self.cover.logger.debug(
+                "_has_actual_sun: Cloud sensor unavailable, ignoring cloud check"
+            )
+            cloud_check = False
+        if cloud_check:
+            self.cover.logger.debug(
+                "_has_actual_sun: No - cloud coverage above threshold"
             )
             return False
 

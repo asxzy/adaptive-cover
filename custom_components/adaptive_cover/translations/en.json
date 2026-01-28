@@ -92,7 +92,9 @@
           "lux_threshold": "Lux threshold",
           "irradiance_entity": "Irradiance sensor (optional)",
           "irradiance_threshold": "Irradiance threshold",
-          "outside_threshold": "Minimum outside temperature for summer mode"
+          "outside_threshold": "Minimum outside temperature for summer mode",
+          "cloud_entity": "Cloud coverage sensor (optional)",
+          "cloud_threshold": "Cloud coverage threshold"
         },
         "data_description": {
           "presence_entity": "Entity representing room or home presence status",
@@ -104,7 +106,9 @@
           "lux_entity": "Use lux sensor to determine if cover should reduce glare in presence mode",
           "lux_threshold": "Threshold for lux sensor, above this value glare should be reduced",
           "irradiance_entity": "Use irradiance sensor to determine if cover should reduce glare in presence mode",
-          "irradiance_threshold": "Threshold for irradiance sensor, above this value glare should be reduced"
+          "irradiance_threshold": "Threshold for irradiance sensor, above this value glare should be reduced",
+          "cloud_entity": "Sensor providing cloud coverage percentage (0-100%). When coverage exceeds threshold, the cover uses default position",
+          "cloud_threshold": "Cloud coverage percentage above which direct sunlight is considered blocked"
         },
         "description": "Add additional climate configuration variables.",
         "title": "Climate settings"
@@ -333,7 +337,9 @@
           "lux_threshold": "Lux threshold",
           "irradiance_entity": "Irradiance sensor (optional)",
           "irradiance_threshold": "Irradiance threshold",
-          "outside_threshold": "Minimum outside temperature for summer mode"
+          "outside_threshold": "Minimum outside temperature for summer mode",
+          "cloud_entity": "Cloud coverage sensor (optional)",
+          "cloud_threshold": "Cloud coverage threshold"
         },
         "data_description": {
           "presence_entity": "Entity representing room or home presence status",
@@ -345,7 +351,9 @@
           "lux_entity": "Use lux sensor to determine if cover should reduce glare in presence mode",
           "lux_threshold": "Threshold for lux sensor, above this value glare should be reduced",
           "irradiance_entity": "Use irradiance sensor to determine if cover should reduce glare in presence mode",
-          "irradiance_threshold": "Threshold for irradiance sensor, above this value glare should be reduced"
+          "irradiance_threshold": "Threshold for irradiance sensor, above this value glare should be reduced",
+          "cloud_entity": "Sensor providing cloud coverage percentage (0-100%). When coverage exceeds threshold, the cover uses default position",
+          "cloud_threshold": "Cloud coverage percentage above which direct sunlight is considered blocked"
         },
         "description": "Add additional climate configuration variables.",
         "title": "Climate settings"

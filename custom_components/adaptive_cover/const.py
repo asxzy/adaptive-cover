@@ -62,6 +62,8 @@ CONF_LUX_THRESHOLD = "lux_threshold"
 CONF_IRRADIANCE_ENTITY = "irradiance_entity"
 CONF_IRRADIANCE_THRESHOLD = "irradiance_threshold"
 CONF_OUTSIDE_THRESHOLD = "outside_threshold"
+CONF_CLOUD_ENTITY = "cloud_entity"
+CONF_CLOUD_THRESHOLD = "cloud_threshold"
 
 
 CONF_DELTA_POSITION = "delta_position"

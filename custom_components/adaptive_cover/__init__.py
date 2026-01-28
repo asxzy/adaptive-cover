@@ -10,6 +10,7 @@ from homeassistant.helpers.event import (
 )
 
 from .const import (
+    CONF_CLOUD_ENTITY,
     CONF_END_ENTITY,
     CONF_ENTITIES,
     CONF_PRESENCE_ENTITY,
@@ -44,8 +45,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _weather_entity = entry.options.get(CONF_WEATHER_ENTITY)
     _cover_entities = entry.options.get(CONF_ENTITIES, [])
     _end_time_entity = entry.options.get(CONF_END_ENTITY)
+    _cloud_entity = entry.options.get(CONF_CLOUD_ENTITY)
     _entities = ["sun.sun"]
-    for entity in [_temp_entity, _presence_entity, _weather_entity, _end_time_entity]:
+    for entity in [
+        _temp_entity,
+        _presence_entity,
+        _weather_entity,
+        _end_time_entity,
+        _cloud_entity,
+    ]:
         if entity is not None:
             _entities.append(entity)
 

@@ -81,6 +81,8 @@ from .const import (
     CONF_MIN_ELEVATION,
     CONF_MIN_POSITION,
     CONF_OUTSIDE_THRESHOLD,
+    CONF_CLOUD_ENTITY,
+    CONF_CLOUD_THRESHOLD,
     CONF_OUTSIDETEMP_ENTITY,
     CONF_PRESENCE_ENTITY,
     CONF_RETURN_SUNSET,
@@ -148,6 +150,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self._manual_toggle = None
         self._lux_toggle = None
         self._irradiance_toggle = None
+        self._cloud_toggle = None
         self._start_time = None
         self._sun_end_time = None
         self._sun_start_time = None
@@ -183,6 +186,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             "is_presence": None,
             "lux": None,
             "irradiance": None,
+            "cloud": None,
         }
         # Current availability status (True = available, False = using cached)
         self._sensor_available: dict[str, bool] = {
@@ -217,7 +221,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
     async def _get_sensor_values_with_fallback(
         self, climate: ClimateCoverData
-    ) -> tuple[bool | None, bool | None, bool | None, bool | None]:
+    ) -> tuple[bool | None, bool | None, bool | None, bool | None, bool | None]:
         """Get sensor values with fallback to last known values.
 
         For each sensor:
@@ -225,7 +229,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         - If current value is unavailable (None), use last known value
 
         Returns:
-            Tuple of (is_presence, has_direct_sun, lux, irradiance) values.
+            Tuple of (is_presence, has_direct_sun, lux, irradiance, cloud) values.
 
         """
         values_changed = False
@@ -283,9 +287,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             lux_value = current_lux
         else:
             lux_value = self._last_known["lux"]
-            self.logger.debug(
-                "Lux sensor unavailable, using last known: %s", lux_value
-            )
+            self.logger.debug("Lux sensor unavailable, using last known: %s", lux_value)
 
         # Handle irradiance
         current_irradiance = climate.irradiance
@@ -301,11 +303,25 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 irradiance_value,
             )
 
+        # Handle cloud
+        current_cloud = climate.cloud
+        if current_cloud is not None:
+            if self._last_known["cloud"] != current_cloud:
+                self._last_known["cloud"] = current_cloud
+                values_changed = True
+            cloud_value = current_cloud
+        else:
+            cloud_value = self._last_known["cloud"]
+            self.logger.debug(
+                "Cloud sensor unavailable, using last known: %s",
+                cloud_value,
+            )
+
         # Save to storage if any value changed
         if values_changed:
             await self._async_save_last_known()
 
-        return is_presence, has_direct_sun, lux_value, irradiance_value
+        return is_presence, has_direct_sun, lux_value, irradiance_value, cloud_value
 
     async def async_timed_refresh(self, event) -> None:
         """Control state at end time."""
@@ -424,6 +440,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             self._has_direct_sun,
             lux_value,
             irradiance_value,
+            cloud_value,
         ) = await self._get_sensor_values_with_fallback(climate)
 
         # Set overrides so calculation uses the same values as the sensors
@@ -437,12 +454,14 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             self._is_presence,
             self._has_direct_sun,
         )
-        # Only set lux/irradiance overrides if we're using a fallback value
+        # Only set lux/irradiance/cloud overrides if we're using a fallback value
         # (i.e., current sensor is unavailable but we have a last known value)
         if climate.lux is None and lux_value is not None:
             climate._lux_override = lux_value
         if climate.irradiance is None and irradiance_value is not None:
             climate._irradiance_override = irradiance_value
+        if climate.cloud is None and cloud_value is not None:
+            climate._cloud_override = cloud_value
 
         # Access climate data if climate mode is enabled
         if self._climate_mode:
@@ -457,7 +476,10 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         )
 
         self.default_state = round(
-            self.normal_cover_state.get_state(has_direct_sun=self._has_direct_sun)
+            self.normal_cover_state.get_state(
+                has_direct_sun=self._has_direct_sun,
+                cloud_override=climate.cloud if self._cloud_toggle else None,
+            )
         )
         self.logger.debug("Determined default state to be %s", self.default_state)
         state = self.state
@@ -840,6 +862,9 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             options.get(CONF_OUTSIDE_THRESHOLD),
             self._lux_toggle,
             self._irradiance_toggle,
+            options.get(CONF_CLOUD_ENTITY),
+            options.get(CONF_CLOUD_THRESHOLD),
+            self._cloud_toggle,
         ]
 
     def climate_mode_data(self, cover_data, climate):
@@ -978,6 +1003,15 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     @irradiance_toggle.setter
     def irradiance_toggle(self, value):
         self._irradiance_toggle = value
+
+    @property
+    def cloud_toggle(self):
+        """Toggle cloud coverage check."""
+        return self._cloud_toggle
+
+    @cloud_toggle.setter
+    def cloud_toggle(self, value):
+        self._cloud_toggle = value
 
 
 class AdaptiveCoverManager:

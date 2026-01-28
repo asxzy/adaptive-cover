@@ -89,6 +89,8 @@ from .const import (
     CONF_WEATHER_ENTITY,
     CONF_WEATHER_STATE,
     CONF_OUTSIDE_THRESHOLD,
+    CONF_CLOUD_ENTITY,
+    CONF_CLOUD_THRESHOLD,
     DOMAIN,
     SensorType,
     CONF_MIN_POSITION,
@@ -297,6 +299,14 @@ CLIMATE_OPTIONS = vol.Schema(
         ),
         vol.Optional(CONF_IRRADIANCE_THRESHOLD, default=300): selector.NumberSelector(
             selector.NumberSelectorConfig(mode="box", unit_of_measurement="W/m²")
+        ),
+        vol.Optional(CONF_CLOUD_ENTITY, default=vol.UNDEFINED): selector.EntitySelector(
+            selector.EntityFilterSelectorConfig(domain=["sensor"])
+        ),
+        vol.Optional(CONF_CLOUD_THRESHOLD, default=80): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0, max=100, step=1, mode="slider", unit_of_measurement="%"
+            )
         ),
         vol.Optional(CONF_TRANSPARENT_BLIND, default=False): selector.BooleanSelector(),
         vol.Optional(
@@ -665,6 +675,8 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
                 CONF_IRRADIANCE_ENTITY: self.config.get(CONF_IRRADIANCE_ENTITY),
                 CONF_IRRADIANCE_THRESHOLD: self.config.get(CONF_IRRADIANCE_THRESHOLD),
                 CONF_OUTSIDE_THRESHOLD: self.config.get(CONF_OUTSIDE_THRESHOLD),
+                CONF_CLOUD_ENTITY: self.config.get(CONF_CLOUD_ENTITY),
+                CONF_CLOUD_THRESHOLD: self.config.get(CONF_CLOUD_THRESHOLD),
             },
         )
 
@@ -898,6 +910,7 @@ class OptionsFlowHandler(OptionsFlow):
                 CONF_PRESENCE_ENTITY,
                 CONF_LUX_ENTITY,
                 CONF_IRRADIANCE_ENTITY,
+                CONF_CLOUD_ENTITY,
             ]
             self.optional_entities(entities, user_input)
             self.options.update(user_input)

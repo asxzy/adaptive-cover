@@ -15,6 +15,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     CONF_CLIMATE_MODE,
+    CONF_CLOUD_ENTITY,
     CONF_ENTITIES,
     CONF_IRRADIANCE_ENTITY,
     CONF_LUX_ENTITY,
@@ -84,12 +85,21 @@ async def async_setup_entry(
         "irradiance_toggle",
         coordinator,
     )
+    cloud_switch = AdaptiveCoverSwitch(
+        config_entry,
+        config_entry.entry_id,
+        "Cloud Coverage",
+        True,
+        "cloud_toggle",
+        coordinator,
+    )
 
     climate_mode = config_entry.options.get(CONF_CLIMATE_MODE)
     weather_entity = config_entry.options.get(CONF_WEATHER_ENTITY)
     sensor_entity = config_entry.options.get(CONF_OUTSIDETEMP_ENTITY)
     lux_entity = config_entry.options.get(CONF_LUX_ENTITY)
     irradiance_entity = config_entry.options.get(CONF_IRRADIANCE_ENTITY)
+    cloud_entity = config_entry.options.get(CONF_CLOUD_ENTITY)
     switches = []
 
     if len(config_entry.options.get(CONF_ENTITIES)) >= 1:
@@ -103,6 +113,8 @@ async def async_setup_entry(
             switches.append(lux_switch)
         if irradiance_entity:
             switches.append(irradiance_switch)
+        if cloud_entity:
+            switches.append(cloud_switch)
 
     async_add_entities(switches)
 
