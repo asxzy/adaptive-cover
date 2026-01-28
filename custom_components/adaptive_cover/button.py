@@ -11,7 +11,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import _LOGGER, CONF_ENTITIES, CONF_SENSOR_TYPE, DOMAIN
+from .const import _LOGGER, CONF_ENTITIES, DOMAIN
 from .coordinator import AdaptiveDataUpdateCoordinator
 
 
@@ -56,26 +56,15 @@ class AdaptiveCoverButton(
     ) -> None:
         """Initialize the button."""
         super().__init__(coordinator=coordinator)
-        self.type = {
-            "cover_blind": "Vertical",
-            "cover_awning": "Horizontal",
-            "cover_tilt": "Tilt",
-        }
         self._name = config_entry.data["name"]
-        self._device_name = self.type[config_entry.data[CONF_SENSOR_TYPE]]
+        self._attr_name = button_name
         self._attr_unique_id = f"{unique_id}_{button_name}"
         self._device_id = unique_id
-        self._button_name = button_name
         self._entities = config_entry.options.get(CONF_ENTITIES, [])
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
-            name=self._device_name,
+            name=self._name,
         )
-
-    @property
-    def name(self):
-        """Name of the entity."""
-        return f"{self._button_name} {self._name}"
 
     async def async_press(self) -> None:
         """Handle the button press."""

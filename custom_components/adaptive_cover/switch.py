@@ -20,7 +20,6 @@ from .const import (
     CONF_IRRADIANCE_ENTITY,
     CONF_LUX_ENTITY,
     CONF_OUTSIDETEMP_ENTITY,
-    CONF_SENSOR_TYPE,
     CONF_WEATHER_ENTITY,
     DOMAIN,
 )
@@ -149,32 +148,21 @@ class AdaptiveCoverSwitch(
     ) -> None:
         """Initialize the switch."""
         super().__init__(coordinator=coordinator)
-        self.type = {
-            "cover_blind": "Vertical",
-            "cover_awning": "Horizontal",
-            "cover_tilt": "Tilt",
-        }
         self._name = config_entry.data["name"]
         self._state: bool | None = None
         self._key = key
         self._attr_translation_key = key
-        self._device_name = self.type[config_entry.data[CONF_SENSOR_TYPE]]
-        self._switch_name = switch_name
+        self._attr_name = switch_name
         self._attr_device_class = device_class
         self._initial_state = initial_state
         self._attr_unique_id = f"{unique_id}_{switch_name}"
         self._device_id = unique_id
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
-            name=self._device_name,
+            name=self._name,
         )
 
         self.coordinator.logger.debug("Setup switch")
-
-    @property
-    def name(self):
-        """Name of the entity."""
-        return f"{self._switch_name} {self._name}"
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""

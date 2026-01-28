@@ -15,7 +15,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_SENSOR_TYPE, DOMAIN
+from .const import DOMAIN
 from .coordinator import AdaptiveDataUpdateCoordinator
 
 
@@ -88,29 +88,18 @@ class AdaptiveCoverBinarySensor(
     ) -> None:
         """Initialize the binary sensor."""
         super().__init__(coordinator=coordinator)
-        self.type = {
-            "cover_blind": "Vertical",
-            "cover_awning": "Horizontal",
-            "cover_tilt": "Tilt",
-        }
         self._key = key
         self._attr_translation_key = key
         self._name = config_entry.data["name"]
-        self._device_name = self.type[config_entry.data[CONF_SENSOR_TYPE]]
-        self._binary_name = binary_name
+        self._attr_name = binary_name
         self._attr_unique_id = f"{unique_id}_{binary_name}"
         self._device_id = unique_id
         self._state = state
         self._attr_device_class = device_class
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
-            name=self._device_name,
+            name=self._name,
         )
-
-    @property
-    def name(self):
-        """Name of the entity."""
-        return f"{self._binary_name} {self._name}"
 
     @property
     def is_on(self) -> bool | None:
