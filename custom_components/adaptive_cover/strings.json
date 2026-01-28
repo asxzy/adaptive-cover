@@ -462,8 +462,8 @@
       "control_mode": {
         "name": "Control Mode",
         "state": {
-          "off": "Off",
-          "on": "On",
+          "disabled": "Disabled",
+          "force": "Force",
           "auto": "Auto"
         }
       }

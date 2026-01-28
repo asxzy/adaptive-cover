@@ -104,8 +104,8 @@ from .const import (
     CONF_WEATHER_ENTITY,
     CONF_WEATHER_STATE,
     CONTROL_MODE_AUTO,
-    CONTROL_MODE_OFF,
-    CONTROL_MODE_ON,
+    CONTROL_MODE_DISABLED,
+    CONTROL_MODE_FORCE,
     DOMAIN,
     LOGGER,
 )
@@ -507,10 +507,21 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             "Determined normal cover state to be %s", self.normal_cover_state
         )
 
+        # In ON mode (basic sun position), ignore all sensor toggles
+        # In AUTO mode, apply sensor toggles
+        if self.is_climate_mode:
+            # AUTO mode: apply weather and cloud toggles
+            has_direct_sun = self._has_direct_sun if self._weather_toggle else True
+            cloud_override = climate.cloud if self._cloud_toggle else None
+        else:
+            # ON mode (or OFF mode): pure sun position, no sensor influence
+            has_direct_sun = True
+            cloud_override = None
+
         self.default_state = round(
             self.normal_cover_state.get_state(
-                has_direct_sun=self._has_direct_sun if self._weather_toggle else True,
-                cloud_override=climate.cloud if self._cloud_toggle else None,
+                has_direct_sun=has_direct_sun,
+                cloud_override=cloud_override,
             )
         )
         self.logger.debug("Determined default state to be %s", self.default_state)
@@ -977,7 +988,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     @control_mode.setter
     def control_mode(self, value):
         """Set control mode and notify select entity."""
-        if value in (CONTROL_MODE_OFF, CONTROL_MODE_ON, CONTROL_MODE_AUTO):
+        if value in (CONTROL_MODE_DISABLED, CONTROL_MODE_FORCE, CONTROL_MODE_AUTO):
             self._control_mode = value
             self.logger.debug("Control mode set to: %s", value)
             # Notify select entity if it exists
@@ -991,7 +1002,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     @property
     def is_control_enabled(self):
         """Check if control is enabled (mode is not OFF)."""
-        return self._control_mode != CONTROL_MODE_OFF
+        return self._control_mode != CONTROL_MODE_DISABLED
 
     @property
     def is_climate_mode(self):
@@ -1104,7 +1115,7 @@ class AdaptiveCoverManager:
                 entity_id,
             )
             # Set control mode to OFF when manual change detected
-            self.coordinator.control_mode = CONTROL_MODE_OFF
+            self.coordinator.control_mode = CONTROL_MODE_DISABLED
 
 
 def inverse_state(state: int) -> int:

@@ -14,8 +14,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import (
     CONF_ENTITIES,
     CONTROL_MODE_AUTO,
-    CONTROL_MODE_OFF,
-    CONTROL_MODE_ON,
+    CONTROL_MODE_DISABLED,
+    CONTROL_MODE_FORCE,
     DOMAIN,
 )
 from .coordinator import AdaptiveDataUpdateCoordinator
@@ -53,7 +53,7 @@ class ControlModeSelect(
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_translation_key = "control_mode"
-    _attr_options = [CONTROL_MODE_OFF, CONTROL_MODE_ON, CONTROL_MODE_AUTO]
+    _attr_options = [CONTROL_MODE_DISABLED, CONTROL_MODE_FORCE, CONTROL_MODE_AUTO]
 
     def __init__(
         self,

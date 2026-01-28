@@ -20,6 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     CONF_CLOUD_ENTITY,
+    CONTROL_MODE_DISABLED,
     DOMAIN,
 )
 from .coordinator import AdaptiveDataUpdateCoordinator
@@ -111,6 +112,14 @@ class AdaptiveCoverSensorEntity(
         """Handle updated data from the coordinator."""
         self.data = self.coordinator.data
         self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available.
+
+        Cover position sensor is unavailable when control mode is OFF.
+        """
+        return self.coordinator.control_mode != CONTROL_MODE_DISABLED
 
     @property
     def native_value(self) -> str | None:

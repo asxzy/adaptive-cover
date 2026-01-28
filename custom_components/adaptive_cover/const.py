@@ -78,8 +78,8 @@ CONF_MANUAL_IGNORE_INTERMEDIATE = "manual_ignore_intermediate"
 CONF_RESET_AT_MIDNIGHT = "reset_at_midnight"
 
 # Control mode constants
-CONTROL_MODE_OFF = "off"
-CONTROL_MODE_ON = "on"
+CONTROL_MODE_DISABLED = "disabled"
+CONTROL_MODE_FORCE = "force"
 CONTROL_MODE_AUTO = "auto"
 
 STRATEGY_MODE_BASIC = "basic"

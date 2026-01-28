@@ -20,6 +20,7 @@ from .const import (
     CONF_LUX_ENTITY,
     CONF_OUTSIDETEMP_ENTITY,
     CONF_WEATHER_ENTITY,
+    CONTROL_MODE_AUTO,
     DOMAIN,
 )
 from .coordinator import AdaptiveDataUpdateCoordinator
@@ -137,6 +138,19 @@ class AdaptiveCoverSwitch(
         )
 
         self.coordinator.logger.debug("Setup switch")
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available.
+
+        Sensor toggles are only available in AUTO mode.
+        """
+        return self.coordinator.control_mode == CONTROL_MODE_AUTO
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        # Update availability when control mode changes
+        self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
