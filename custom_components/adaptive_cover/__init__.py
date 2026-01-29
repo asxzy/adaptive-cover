@@ -144,7 +144,7 @@ async def _async_setup_cover_entry(hass: HomeAssistant, entry: ConfigEntry) -> b
             )
 
     # Create cover coordinator
-    coordinator = AdaptiveDataUpdateCoordinator(hass, room_coordinator)
+    coordinator = AdaptiveDataUpdateCoordinator(hass, entry, room_coordinator)
 
     # Determine which options to use for entity tracking
     if room_coordinator:

@@ -147,10 +147,12 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     def __init__(
         self,
         hass: HomeAssistant,
+        config_entry: ConfigEntry,
         room_coordinator: RoomCoordinator | None = None,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(hass, LOGGER, name=DOMAIN)
+        self.config_entry = config_entry
 
         self.logger = ConfigContextAdapter(_LOGGER)
         self.logger.set_config_name(self.config_entry.data.get("name"))
