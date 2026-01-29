@@ -68,6 +68,7 @@ async def async_setup_entry(
             "sun_motion",
             BinarySensorDeviceClass.MOTION,
             coordinator,
+            room_id=room_id,
         )
         entities.append(binary_sensor)
 
@@ -112,6 +113,7 @@ class AdaptiveCoverBinarySensor(CoordinatorEntity[CoordinatorType], BinarySensor
         device_class: BinarySensorDeviceClass,
         coordinator: CoordinatorType,
         is_room: bool = False,
+        room_id: str | None = None,
     ) -> None:
         """Initialize the binary sensor."""
         super().__init__(coordinator=coordinator)
@@ -124,6 +126,7 @@ class AdaptiveCoverBinarySensor(CoordinatorEntity[CoordinatorType], BinarySensor
         self._state = state
         self._attr_device_class = device_class
         self._is_room = is_room
+        self._room_id = room_id
 
         # Set device info based on entry type
         if is_room:
@@ -132,10 +135,13 @@ class AdaptiveCoverBinarySensor(CoordinatorEntity[CoordinatorType], BinarySensor
                 name=f"Room: {self._name}",
             )
         else:
-            self._attr_device_info = DeviceInfo(
+            info = DeviceInfo(
                 identifiers={(DOMAIN, self._device_id)},
                 name=self._name,
             )
+            if room_id:
+                info["via_device"] = (DOMAIN, f"room_{room_id}")
+            self._attr_device_info = info
 
     @property
     def is_on(self) -> bool | None:

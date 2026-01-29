@@ -9,7 +9,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_ENTITIES, DOMAIN
+from .const import CONF_ENTITIES, CONF_ROOM_ID, DOMAIN
 from .coordinator import AdaptiveDataUpdateCoordinator
 
 
@@ -22,6 +22,7 @@ async def async_setup_entry(
     coordinator: AdaptiveDataUpdateCoordinator = hass.data[DOMAIN][
         config_entry.entry_id
     ]
+    room_id = config_entry.data.get(CONF_ROOM_ID)
 
     entities = []
 
@@ -31,6 +32,7 @@ async def async_setup_entry(
             config_entry,
             config_entry.entry_id,
             coordinator,
+            room_id=room_id,
         )
         entities.append(force_update_button)
 
@@ -48,6 +50,7 @@ class ForceUpdateButton(CoordinatorEntity[AdaptiveDataUpdateCoordinator], Button
         config_entry: ConfigEntry,
         unique_id: str,
         coordinator: AdaptiveDataUpdateCoordinator,
+        room_id: str | None = None,
     ) -> None:
         """Initialize the button."""
         super().__init__(coordinator=coordinator)
@@ -56,10 +59,15 @@ class ForceUpdateButton(CoordinatorEntity[AdaptiveDataUpdateCoordinator], Button
         self._attr_unique_id = f"{unique_id}_force_update"
         self._attr_icon = "mdi:refresh"
         self._device_id = unique_id
-        self._attr_device_info = DeviceInfo(
+        self._room_id = room_id
+
+        info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},
             name=self._name,
         )
+        if room_id:
+            info["via_device"] = (DOMAIN, f"room_{room_id}")
+        self._attr_device_info = info
 
         self.coordinator.logger.debug("Setup force update button")
 

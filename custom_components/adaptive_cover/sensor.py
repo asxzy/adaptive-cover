@@ -62,7 +62,7 @@ async def async_setup_entry(
     # Cover entry - position, time, and control sensors
     else:
         sensor = AdaptiveCoverSensorEntity(
-            config_entry.entry_id, hass, config_entry, name, coordinator
+            config_entry.entry_id, hass, config_entry, name, coordinator, room_id=room_id
         )
         start = AdaptiveCoverTimeSensorEntity(
             config_entry.entry_id,
@@ -73,6 +73,7 @@ async def async_setup_entry(
             "start",
             "mdi:sun-clock-outline",
             coordinator,
+            room_id=room_id,
         )
         end = AdaptiveCoverTimeSensorEntity(
             config_entry.entry_id,
@@ -83,9 +84,10 @@ async def async_setup_entry(
             "end",
             "mdi:sun-clock",
             coordinator,
+            room_id=room_id,
         )
         control = AdaptiveCoverControlSensorEntity(
-            config_entry.entry_id, hass, config_entry, name, coordinator
+            config_entry.entry_id, hass, config_entry, name, coordinator, room_id=room_id
         )
         entities.extend([sensor, start, end, control])
 
@@ -119,6 +121,7 @@ class AdaptiveCoverSensorEntity(
         config_entry,
         name: str,
         coordinator: AdaptiveDataUpdateCoordinator,
+        room_id: str | None = None,
     ) -> None:
         """Initialize adaptive_cover Sensor."""
         super().__init__(coordinator=coordinator)
@@ -130,6 +133,7 @@ class AdaptiveCoverSensorEntity(
         self.config_entry = config_entry
         self._name = name
         self._device_id = unique_id
+        self._room_id = room_id
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -153,11 +157,14 @@ class AdaptiveCoverSensorEntity(
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info."""
-        return DeviceInfo(
+        info = DeviceInfo(
             entry_type=DeviceEntryType.SERVICE,
             identifiers={(DOMAIN, self._device_id)},
             name=self._name,
         )
+        if self._room_id:
+            info["via_device"] = (DOMAIN, f"room_{self._room_id}")
+        return info
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:  # noqa: D102
@@ -183,6 +190,7 @@ class AdaptiveCoverTimeSensorEntity(
         key: str,
         icon: str,
         coordinator: AdaptiveDataUpdateCoordinator,
+        room_id: str | None = None,
     ) -> None:
         """Initialize adaptive_cover Sensor."""
         super().__init__(coordinator=coordinator)
@@ -196,6 +204,7 @@ class AdaptiveCoverTimeSensorEntity(
         self.hass = hass
         self.config_entry = config_entry
         self._name = name
+        self._room_id = room_id
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -211,11 +220,14 @@ class AdaptiveCoverTimeSensorEntity(
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info."""
-        return DeviceInfo(
+        info = DeviceInfo(
             entry_type=DeviceEntryType.SERVICE,
             identifiers={(DOMAIN, self._device_id)},
             name=self._name,
         )
+        if self._room_id:
+            info["via_device"] = (DOMAIN, f"room_{self._room_id}")
+        return info
 
 
 class AdaptiveCoverControlSensorEntity(
@@ -234,6 +246,7 @@ class AdaptiveCoverControlSensorEntity(
         config_entry,
         name: str,
         coordinator: AdaptiveDataUpdateCoordinator,
+        room_id: str | None = None,
     ) -> None:
         """Initialize adaptive_cover Sensor."""
         super().__init__(coordinator=coordinator)
@@ -246,6 +259,7 @@ class AdaptiveCoverControlSensorEntity(
         self.hass = hass
         self.config_entry = config_entry
         self._name = name
+        self._room_id = room_id
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -261,11 +275,14 @@ class AdaptiveCoverControlSensorEntity(
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info."""
-        return DeviceInfo(
+        info = DeviceInfo(
             entry_type=DeviceEntryType.SERVICE,
             identifiers={(DOMAIN, self._device_id)},
             name=self._name,
         )
+        if self._room_id:
+            info["via_device"] = (DOMAIN, f"room_{self._room_id}")
+        return info
 
 
 class AdaptiveCoverCloudSensorEntity(CoordinatorEntity[CoordinatorType], SensorEntity):
