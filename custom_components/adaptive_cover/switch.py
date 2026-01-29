@@ -25,6 +25,7 @@ from .const import (
     CONTROL_MODE_AUTO,
     DOMAIN,
     EntryType,
+    _LOGGER,
 )
 from .coordinator import AdaptiveDataUpdateCoordinator
 from .room_coordinator import RoomCoordinator
@@ -108,6 +109,20 @@ async def async_setup_entry(
     cloud_entity = config_entry.options.get(CONF_CLOUD_ENTITY)
     switches = []
 
+    _LOGGER.debug(
+        "Switch setup for %s: climate_mode=%s, weather_entity=%s, "
+        "sensor_entity=%s, lux_entity=%s, irradiance_entity=%s, cloud_entity=%s, "
+        "control_mode=%s",
+        config_entry.data.get("name"),
+        climate_mode,
+        weather_entity,
+        sensor_entity,
+        lux_entity,
+        irradiance_entity,
+        cloud_entity,
+        coordinator.control_mode,
+    )
+
     # Sensor toggles are shown if climate mode is enabled in config
     # They only affect behavior when control mode is AUTO
     if climate_mode:
@@ -121,6 +136,13 @@ async def async_setup_entry(
             switches.append(cloud_switch)
         if weather_entity:
             switches.append(weather_switch)
+
+    _LOGGER.debug(
+        "Created %d switches for %s: %s",
+        len(switches),
+        config_entry.data.get("name"),
+        [s._key for s in switches],
+    )
 
     async_add_entities(switches)
 
@@ -188,7 +210,16 @@ class AdaptiveCoverSwitch(
 
         Sensor toggles are only available in AUTO mode.
         """
-        return self.coordinator.control_mode == CONTROL_MODE_AUTO
+        current_mode = self.coordinator.control_mode
+        is_available = current_mode == CONTROL_MODE_AUTO
+        if not is_available:
+            self.coordinator.logger.debug(
+                "%s switch unavailable: control_mode=%r, expected=%r",
+                self._key,
+                current_mode,
+                CONTROL_MODE_AUTO,
+            )
+        return is_available
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
