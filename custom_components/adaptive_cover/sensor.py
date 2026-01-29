@@ -19,6 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    _LOGGER,
     CONF_CLOUD_ENTITY,
     CONF_ENTRY_TYPE,
     CONF_ROOM_ID,
@@ -62,7 +63,12 @@ async def async_setup_entry(
     # Cover entry - position, time, and control sensors
     else:
         sensor = AdaptiveCoverSensorEntity(
-            config_entry.entry_id, hass, config_entry, name, coordinator, room_id=room_id
+            config_entry.entry_id,
+            hass,
+            config_entry,
+            name,
+            coordinator,
+            room_id=room_id,
         )
         start = AdaptiveCoverTimeSensorEntity(
             config_entry.entry_id,
@@ -87,7 +93,12 @@ async def async_setup_entry(
             room_id=room_id,
         )
         control = AdaptiveCoverControlSensorEntity(
-            config_entry.entry_id, hass, config_entry, name, coordinator, room_id=room_id
+            config_entry.entry_id,
+            hass,
+            config_entry,
+            name,
+            coordinator,
+            room_id=room_id,
         )
         entities.extend([sensor, start, end, control])
 
@@ -343,9 +354,25 @@ class AdaptiveCoverCloudSensorEntity(CoordinatorEntity[CoordinatorType], SensorE
         if isinstance(self.coordinator, RoomCoordinator):
             # For room coordinator, get from last_known if available
             if self.coordinator.data is None:
+                _LOGGER.debug("Cloud sensor: coordinator.data is None")
                 return None
-            return self.coordinator.data.last_known.get("cloud")
-        return self.coordinator.data.states.get("cloud_coverage")
+            value = self.coordinator.data.last_known.get("cloud")
+            _LOGGER.debug("Cloud sensor (room): last_known.cloud = %s", value)
+            return value
+        value = self.coordinator.data.states.get("cloud_coverage")
+        _LOGGER.debug("Cloud sensor (cover): cloud_coverage = %s", value)
+        return value
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        if not super().available:
+            return False
+        if isinstance(self.coordinator, RoomCoordinator):
+            if self.coordinator.data is None:
+                return False
+            return self.coordinator.data.last_known.get("cloud") is not None
+        return self.coordinator.data.states.get("cloud_coverage") is not None
 
     @property
     def device_info(self) -> DeviceInfo:

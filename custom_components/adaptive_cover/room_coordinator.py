@@ -13,6 +13,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .config_context_adapter import ConfigContextAdapter
+from .helpers import get_safe_state
 from .const import (
     _LOGGER,
     CONF_CLIMATE_MODE,
@@ -176,6 +177,11 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
         self.logger.debug("Updating room data")
         options = self.config_entry.options
 
+        # Fetch and update all sensor values
+        await self._update_cloud_value(options)
+        await self._update_presence_value(options)
+        await self._update_weather_value(options)
+
         # Build climate data arguments for child coordinators
         climate_data_args = self._get_climate_data_args(options)
 
@@ -192,6 +198,108 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
             sensor_available=self._sensor_available.copy(),
             last_known=self._last_known.copy(),
         )
+
+    async def _update_cloud_value(self, options) -> None:
+        """Fetch cloud entity value and update last_known."""
+        cloud_entity = options.get(CONF_CLOUD_ENTITY)
+        if cloud_entity is None:
+            self.logger.debug("No cloud entity configured")
+            return
+
+        value = get_safe_state(self.hass, cloud_entity)
+        self.logger.debug(
+            "Cloud entity %s state: %s (previous: %s)",
+            cloud_entity,
+            value,
+            self._last_known.get("cloud"),
+        )
+
+        if value is not None:
+            try:
+                cloud_value = float(value)
+                if self._last_known.get("cloud") != cloud_value:
+                    self._last_known["cloud"] = cloud_value
+                    await self._async_save_last_known()
+                    self.logger.debug("Updated cloud last_known to: %s", cloud_value)
+                self._sensor_available["cloud"] = True
+            except (ValueError, TypeError) as err:
+                self.logger.warning("Invalid cloud value '%s': %s", value, err)
+                self._sensor_available["cloud"] = False
+        else:
+            self._sensor_available["cloud"] = False
+            self.logger.debug(
+                "Cloud entity unavailable, keeping last known: %s",
+                self._last_known.get("cloud"),
+            )
+
+    async def _update_presence_value(self, options) -> None:
+        """Fetch presence entity value and update last_known."""
+        presence_entity = options.get(CONF_PRESENCE_ENTITY)
+        if presence_entity is None:
+            self.logger.debug("No presence entity configured")
+            return
+
+        value = get_safe_state(self.hass, presence_entity)
+        self.logger.debug(
+            "Presence entity %s state: %s (previous: %s)",
+            presence_entity,
+            value,
+            self._last_known.get("is_presence"),
+        )
+
+        if value is not None:
+            domain = presence_entity.split(".")[0]
+            if domain == "binary_sensor":
+                presence_value = value == "on"
+            elif domain == "device_tracker":
+                presence_value = value == "home"
+            else:
+                presence_value = value not in ("off", "not_home", "0", "false")
+
+            if self._last_known.get("is_presence") != presence_value:
+                self._last_known["is_presence"] = presence_value
+                await self._async_save_last_known()
+                self.logger.debug("Updated presence last_known to: %s", presence_value)
+            self._sensor_available["is_presence"] = True
+        else:
+            self._sensor_available["is_presence"] = False
+            self.logger.debug(
+                "Presence entity unavailable, keeping last known: %s",
+                self._last_known.get("is_presence"),
+            )
+
+    async def _update_weather_value(self, options) -> None:
+        """Fetch weather entity value and update has_direct_sun in last_known."""
+        weather_entity = options.get(CONF_WEATHER_ENTITY)
+        if weather_entity is None:
+            self.logger.debug("No weather entity configured")
+            return
+
+        weather_conditions = options.get(CONF_WEATHER_STATE, [])
+        value = get_safe_state(self.hass, weather_entity)
+        self.logger.debug(
+            "Weather entity %s state: %s (conditions: %s, previous: %s)",
+            weather_entity,
+            value,
+            weather_conditions,
+            self._last_known.get("has_direct_sun"),
+        )
+
+        if value is not None:
+            has_direct_sun = value in weather_conditions
+            if self._last_known.get("has_direct_sun") != has_direct_sun:
+                self._last_known["has_direct_sun"] = has_direct_sun
+                await self._async_save_last_known()
+                self.logger.debug(
+                    "Updated has_direct_sun last_known to: %s", has_direct_sun
+                )
+            self._sensor_available["has_direct_sun"] = True
+        else:
+            self._sensor_available["has_direct_sun"] = False
+            self.logger.debug(
+                "Weather entity unavailable, keeping last known: %s",
+                self._last_known.get("has_direct_sun"),
+            )
 
     def _get_climate_data_args(self, options) -> list:
         """Get climate data arguments for ClimateCoverData construction."""

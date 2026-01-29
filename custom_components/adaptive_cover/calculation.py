@@ -552,7 +552,7 @@ class ClimateCoverData:
         if value is None:
             self.logger.debug("cloud(): Cloud entity unavailable, returning None")
             return None
-        return float(value) > self.cloud_threshold
+        return float(value) >= self.cloud_threshold
 
     @property
     def cloud_value(self) -> float | None:

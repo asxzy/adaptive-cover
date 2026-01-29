@@ -175,18 +175,30 @@ class AdaptiveCoverBinarySensor(CoordinatorEntity[CoordinatorType], BinarySensor
             if self.coordinator.data is None:
                 return False
             if self._key == "has_direct_sun":
-                return self.coordinator.data.sensor_available.get(
-                    "has_direct_sun", True
+                # Available if sensor is available OR we have a last known value
+                sensor_avail = self.coordinator.data.sensor_available.get(
+                    "has_direct_sun", False
                 )
+                has_value = (
+                    self.coordinator.data.last_known.get("has_direct_sun") is not None
+                )
+                return sensor_avail or has_value
             if self._key == "is_presence":
-                return self.coordinator.data.sensor_available.get("is_presence", True)
+                # Available if sensor is available OR we have a last known value
+                sensor_avail = self.coordinator.data.sensor_available.get(
+                    "is_presence", False
+                )
+                has_value = (
+                    self.coordinator.data.last_known.get("is_presence") is not None
+                )
+                return sensor_avail or has_value
             return True
 
         # For cover coordinator - check availability status
         if self._key == "has_direct_sun":
-            return self.coordinator.data.states.get("has_direct_sun_available", True)
+            return self.coordinator.data.states.get("has_direct_sun") is not None
         if self._key == "is_presence":
-            return self.coordinator.data.states.get("is_presence_available", True)
+            return self.coordinator.data.states.get("is_presence") is not None
         return True
 
     @property
