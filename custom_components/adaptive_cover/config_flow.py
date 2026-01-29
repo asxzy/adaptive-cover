@@ -47,6 +47,7 @@ from .const import (
     CONF_END_ENTITY,
     CONF_END_TIME,
     CONF_ENTITIES,
+    CONF_ENTRY_TYPE,
     CONF_FOV_LEFT,
     CONF_FOV_RIGHT,
     CONF_HEIGHT_WIN,
@@ -71,6 +72,7 @@ from .const import (
     CONF_OUTSIDETEMP_ENTITY,
     CONF_PRESENCE_ENTITY,
     CONF_RETURN_SUNSET,
+    CONF_ROOM_ID,
     CONF_SENSOR_TYPE,
     CONF_SHADED_AREA_HEIGHT,
     CONF_START_ENTITY,
@@ -91,6 +93,7 @@ from .const import (
     CONF_CLOUD_ENTITY,
     CONF_CLOUD_THRESHOLD,
     DOMAIN,
+    EntryType,
     SensorType,
     CONF_MIN_POSITION,
     CONF_ENABLE_MAX_POSITION,
@@ -419,6 +422,8 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
         self.type_blind: str | None = None
         self.config: dict[str, Any] = {}
         self.mode: str = "basic"
+        self.room_id: str | None = None  # For cover-to-room assignment
+        self.entry_type: str = EntryType.COVER  # Default to cover
 
     @staticmethod
     @callback
@@ -426,18 +431,186 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
         """Get the options flow for this handler."""
         return OptionsFlowHandler(config_entry)
 
+    def _get_existing_rooms(self) -> list[tuple[str, str]]:
+        """Get list of existing room entries as (entry_id, name) tuples."""
+        rooms = []
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.data.get(CONF_ENTRY_TYPE) == EntryType.ROOM:
+                rooms.append((entry.entry_id, entry.data.get("name", "Unknown Room")))
+        return rooms
+
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
-        """Handle the initial step."""
-        # errors = {}
+        """Handle the initial step - show menu for room/cover selection."""
+        rooms = self._get_existing_rooms()
+
+        # If rooms exist, show menu with all options
+        if rooms:
+            menu_options = ["create_room", "standalone_cover", "add_cover_to_room"]
+        else:
+            # No rooms exist - only show room and standalone options
+            menu_options = ["create_room", "standalone_cover"]
+
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=menu_options,
+        )
+
+    async def async_step_create_room(self, user_input: dict[str, Any] | None = None):
+        """Create a new room."""
+        self.entry_type = EntryType.ROOM
+
+        room_schema = vol.Schema(
+            {
+                vol.Required("name"): selector.TextSelector(),
+            }
+        )
+
         if user_input:
             self.config = user_input
+            return await self.async_step_room_climate()
+
+        return self.async_show_form(step_id="create_room", data_schema=room_schema)
+
+    async def async_step_room_climate(self, user_input: dict[str, Any] | None = None):
+        """Configure room climate sensors."""
+        if user_input is not None:
+            entities = [
+                CONF_OUTSIDETEMP_ENTITY,
+                CONF_WEATHER_ENTITY,
+                CONF_PRESENCE_ENTITY,
+                CONF_LUX_ENTITY,
+                CONF_IRRADIANCE_ENTITY,
+                CONF_CLOUD_ENTITY,
+            ]
+            for key in entities:
+                if key not in user_input:
+                    user_input[key] = None
+            self.config.update(user_input)
+            if self.config.get(CONF_WEATHER_ENTITY):
+                return await self.async_step_room_weather()
+            return await self.async_step_room_automation()
+
+        return self.async_show_form(step_id="room_climate", data_schema=CLIMATE_OPTIONS)
+
+    async def async_step_room_weather(self, user_input: dict[str, Any] | None = None):
+        """Configure room weather conditions."""
+        if user_input is not None:
+            self.config.update(user_input)
+            return await self.async_step_room_automation()
+
+        return self.async_show_form(step_id="room_weather", data_schema=WEATHER_OPTIONS)
+
+    async def async_step_room_automation(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Configure room automation settings."""
+        if user_input is not None:
+            entities = [CONF_START_ENTITY, CONF_END_ENTITY, CONF_MANUAL_THRESHOLD]
+            for key in entities:
+                if key not in user_input:
+                    user_input[key] = None
+            self.config.update(user_input)
+            return await self.async_step_create_room_entry()
+
+        return self.async_show_form(
+            step_id="room_automation", data_schema=AUTOMATION_CONFIG
+        )
+
+    async def async_step_create_room_entry(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Create the room entry."""
+        return self.async_create_entry(
+            title=f"Room: {self.config['name']}",
+            data={
+                "name": self.config["name"],
+                CONF_ENTRY_TYPE: EntryType.ROOM,
+            },
+            options={
+                # Climate sensors
+                CONF_TEMP_ENTITY: self.config.get(CONF_TEMP_ENTITY),
+                CONF_TEMP_LOW: self.config.get(CONF_TEMP_LOW),
+                CONF_TEMP_HIGH: self.config.get(CONF_TEMP_HIGH),
+                CONF_OUTSIDETEMP_ENTITY: self.config.get(CONF_OUTSIDETEMP_ENTITY),
+                CONF_OUTSIDE_THRESHOLD: self.config.get(CONF_OUTSIDE_THRESHOLD),
+                CONF_PRESENCE_ENTITY: self.config.get(CONF_PRESENCE_ENTITY),
+                CONF_LUX_ENTITY: self.config.get(CONF_LUX_ENTITY),
+                CONF_LUX_THRESHOLD: self.config.get(CONF_LUX_THRESHOLD),
+                CONF_IRRADIANCE_ENTITY: self.config.get(CONF_IRRADIANCE_ENTITY),
+                CONF_IRRADIANCE_THRESHOLD: self.config.get(CONF_IRRADIANCE_THRESHOLD),
+                CONF_CLOUD_ENTITY: self.config.get(CONF_CLOUD_ENTITY),
+                CONF_CLOUD_THRESHOLD: self.config.get(CONF_CLOUD_THRESHOLD),
+                CONF_TRANSPARENT_BLIND: self.config.get(CONF_TRANSPARENT_BLIND, False),
+                CONF_WEATHER_ENTITY: self.config.get(CONF_WEATHER_ENTITY),
+                CONF_WEATHER_STATE: self.config.get(CONF_WEATHER_STATE),
+                CONF_CLIMATE_MODE: True,  # Room always has climate mode enabled
+                # Automation settings
+                CONF_DELTA_POSITION: self.config.get(CONF_DELTA_POSITION),
+                CONF_DELTA_TIME: self.config.get(CONF_DELTA_TIME),
+                CONF_START_TIME: self.config.get(CONF_START_TIME),
+                CONF_START_ENTITY: self.config.get(CONF_START_ENTITY),
+                CONF_END_TIME: self.config.get(CONF_END_TIME),
+                CONF_END_ENTITY: self.config.get(CONF_END_ENTITY),
+                CONF_RETURN_SUNSET: self.config.get(CONF_RETURN_SUNSET),
+                CONF_MANUAL_THRESHOLD: self.config.get(CONF_MANUAL_THRESHOLD),
+                CONF_MANUAL_IGNORE_INTERMEDIATE: self.config.get(
+                    CONF_MANUAL_IGNORE_INTERMEDIATE
+                ),
+                CONF_RESET_AT_MIDNIGHT: self.config.get(CONF_RESET_AT_MIDNIGHT, True),
+            },
+        )
+
+    async def async_step_standalone_cover(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Create a standalone cover (not part of a room)."""
+        self.entry_type = EntryType.COVER
+        self.room_id = None
+        return await self.async_step_cover_type(user_input)
+
+    async def async_step_add_cover_to_room(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Select a room to add a cover to."""
+        rooms = self._get_existing_rooms()
+
+        if not rooms:
+            # No rooms exist, redirect to create room first
+            return await self.async_step_create_room()
+
+        room_options = [
+            selector.SelectOptionDict(value=room_id, label=name)
+            for room_id, name in rooms
+        ]
+
+        select_room_schema = vol.Schema(
+            {
+                vol.Required("room_id"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=room_options)
+                ),
+            }
+        )
+
+        if user_input:
+            self.room_id = user_input["room_id"]
+            self.entry_type = EntryType.COVER
+            return await self.async_step_cover_type()
+
+        return self.async_show_form(
+            step_id="add_cover_to_room", data_schema=select_room_schema
+        )
+
+    async def async_step_cover_type(self, user_input: dict[str, Any] | None = None):
+        """Select cover type."""
+        if user_input:
+            self.config.update(user_input)
             if self.config[CONF_MODE] == SensorType.BLIND:
                 return await self.async_step_vertical()
             if self.config[CONF_MODE] == SensorType.AWNING:
                 return await self.async_step_horizontal()
             if self.config[CONF_MODE] == SensorType.TILT:
                 return await self.async_step_tilt()
-        return self.async_show_form(step_id="user", data_schema=CONFIG_SCHEMA)
+        return self.async_show_form(step_id="cover_type", data_schema=CONFIG_SCHEMA)
 
     async def async_step_vertical(self, user_input: dict[str, Any] | None = None):
         """Show basic config for vertical blinds."""
@@ -574,6 +747,10 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
 
     async def async_step_automation(self, user_input: dict[str, Any] | None = None):
         """Manage automation options."""
+        # If part of a room, skip automation config (use room's settings)
+        if self.room_id:
+            return await self.async_step_update()
+
         if user_input is not None:
             self.config.update(user_input)
             if self.config[CONF_CLIMATE_MODE] is True:
@@ -599,78 +776,109 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
 
     async def async_step_update(self, user_input: dict[str, Any] | None = None):
         """Create entry."""
-        type = {
+        type_names = {
             "cover_blind": "Vertical",
             "cover_awning": "Horizontal",
             "cover_tilt": "Tilt",
         }
+
+        # Build entry data
+        entry_data = {
+            "name": self.config["name"],
+            CONF_SENSOR_TYPE: self.type_blind,
+            CONF_ENTRY_TYPE: EntryType.COVER,
+        }
+
+        # Add room_id if part of a room
+        if self.room_id:
+            entry_data[CONF_ROOM_ID] = self.room_id
+            title = f"{type_names[self.type_blind]} {self.config['name']} (Room)"
+        else:
+            title = f"{type_names[self.type_blind]} {self.config['name']}"
+
+        # Build options - cover-specific options only
+        options = {
+            CONF_MODE: self.mode,
+            CONF_AZIMUTH: self.config.get(CONF_AZIMUTH),
+            CONF_HEIGHT_WIN: self.config.get(CONF_HEIGHT_WIN),
+            CONF_DISTANCE: self.config.get(CONF_DISTANCE),
+            CONF_COVER_BOTTOM: self.config.get(CONF_COVER_BOTTOM, 0),
+            CONF_SHADED_AREA_HEIGHT: self.config.get(CONF_SHADED_AREA_HEIGHT, 0),
+            CONF_DEFAULT_HEIGHT: self.config.get(CONF_DEFAULT_HEIGHT),
+            CONF_MAX_POSITION: self.config.get(CONF_MAX_POSITION),
+            CONF_MIN_POSITION: self.config.get(CONF_MIN_POSITION),
+            CONF_FOV_LEFT: self.config.get(CONF_FOV_LEFT),
+            CONF_FOV_RIGHT: self.config.get(CONF_FOV_RIGHT),
+            CONF_ENTITIES: self.config.get(CONF_ENTITIES),
+            CONF_INVERSE_STATE: self.config.get(CONF_INVERSE_STATE),
+            CONF_SUNSET_POS: self.config.get(CONF_SUNSET_POS),
+            CONF_SUNSET_OFFSET: self.config.get(CONF_SUNSET_OFFSET),
+            CONF_SUNRISE_OFFSET: self.config.get(CONF_SUNRISE_OFFSET),
+            CONF_LENGTH_AWNING: self.config.get(CONF_LENGTH_AWNING),
+            CONF_AWNING_ANGLE: self.config.get(CONF_AWNING_ANGLE),
+            CONF_TILT_DISTANCE: self.config.get(CONF_TILT_DISTANCE),
+            CONF_TILT_DEPTH: self.config.get(CONF_TILT_DEPTH),
+            CONF_TILT_MODE: self.config.get(CONF_TILT_MODE),
+            CONF_BLIND_SPOT_RIGHT: self.config.get(CONF_BLIND_SPOT_RIGHT, None),
+            CONF_BLIND_SPOT_LEFT: self.config.get(CONF_BLIND_SPOT_LEFT, None),
+            CONF_BLIND_SPOT_ELEVATION: self.config.get(CONF_BLIND_SPOT_ELEVATION, None),
+            CONF_ENABLE_BLIND_SPOT: self.config.get(CONF_ENABLE_BLIND_SPOT),
+            CONF_ENABLE_MAX_POSITION: self.config.get(CONF_ENABLE_MAX_POSITION, False),
+            CONF_ENABLE_MIN_POSITION: self.config.get(CONF_ENABLE_MIN_POSITION, False),
+            CONF_MIN_ELEVATION: self.config.get(CONF_MIN_ELEVATION, None),
+            CONF_MAX_ELEVATION: self.config.get(CONF_MAX_ELEVATION, None),
+            CONF_INTERP: self.config.get(CONF_INTERP),
+            CONF_INTERP_START: self.config.get(CONF_INTERP_START, None),
+            CONF_INTERP_END: self.config.get(CONF_INTERP_END, None),
+            CONF_INTERP_LIST: self.config.get(CONF_INTERP_LIST, []),
+            CONF_INTERP_LIST_NEW: self.config.get(CONF_INTERP_LIST_NEW, []),
+        }
+
+        # Add shared options only for standalone covers (not part of a room)
+        if not self.room_id:
+            options.update(
+                {
+                    CONF_TEMP_ENTITY: self.config.get(CONF_TEMP_ENTITY),
+                    CONF_PRESENCE_ENTITY: self.config.get(CONF_PRESENCE_ENTITY),
+                    CONF_WEATHER_ENTITY: self.config.get(CONF_WEATHER_ENTITY),
+                    CONF_TEMP_LOW: self.config.get(CONF_TEMP_LOW),
+                    CONF_TEMP_HIGH: self.config.get(CONF_TEMP_HIGH),
+                    CONF_OUTSIDETEMP_ENTITY: self.config.get(CONF_OUTSIDETEMP_ENTITY),
+                    CONF_CLIMATE_MODE: self.config.get(CONF_CLIMATE_MODE),
+                    CONF_WEATHER_STATE: self.config.get(CONF_WEATHER_STATE),
+                    CONF_DELTA_POSITION: self.config.get(CONF_DELTA_POSITION),
+                    CONF_DELTA_TIME: self.config.get(CONF_DELTA_TIME),
+                    CONF_START_TIME: self.config.get(CONF_START_TIME),
+                    CONF_START_ENTITY: self.config.get(CONF_START_ENTITY),
+                    CONF_END_TIME: self.config.get(CONF_END_TIME),
+                    CONF_END_ENTITY: self.config.get(CONF_END_ENTITY),
+                    CONF_RETURN_SUNSET: self.config.get(CONF_RETURN_SUNSET),
+                    CONF_MANUAL_THRESHOLD: self.config.get(CONF_MANUAL_THRESHOLD),
+                    CONF_RESET_AT_MIDNIGHT: self.config.get(
+                        CONF_RESET_AT_MIDNIGHT, True
+                    ),
+                    CONF_MANUAL_IGNORE_INTERMEDIATE: self.config.get(
+                        CONF_MANUAL_IGNORE_INTERMEDIATE
+                    ),
+                    CONF_TRANSPARENT_BLIND: self.config.get(
+                        CONF_TRANSPARENT_BLIND, False
+                    ),
+                    CONF_LUX_ENTITY: self.config.get(CONF_LUX_ENTITY),
+                    CONF_LUX_THRESHOLD: self.config.get(CONF_LUX_THRESHOLD),
+                    CONF_IRRADIANCE_ENTITY: self.config.get(CONF_IRRADIANCE_ENTITY),
+                    CONF_IRRADIANCE_THRESHOLD: self.config.get(
+                        CONF_IRRADIANCE_THRESHOLD
+                    ),
+                    CONF_OUTSIDE_THRESHOLD: self.config.get(CONF_OUTSIDE_THRESHOLD),
+                    CONF_CLOUD_ENTITY: self.config.get(CONF_CLOUD_ENTITY),
+                    CONF_CLOUD_THRESHOLD: self.config.get(CONF_CLOUD_THRESHOLD),
+                }
+            )
+
         return self.async_create_entry(
-            title=f"{type[self.type_blind]} {self.config['name']}",
-            data={
-                "name": self.config["name"],
-                CONF_SENSOR_TYPE: self.type_blind,
-            },
-            options={
-                CONF_MODE: self.mode,
-                CONF_AZIMUTH: self.config.get(CONF_AZIMUTH),
-                CONF_HEIGHT_WIN: self.config.get(CONF_HEIGHT_WIN),
-                CONF_DISTANCE: self.config.get(CONF_DISTANCE),
-                CONF_COVER_BOTTOM: self.config.get(CONF_COVER_BOTTOM, 0),
-                CONF_SHADED_AREA_HEIGHT: self.config.get(CONF_SHADED_AREA_HEIGHT, 0),
-                CONF_DEFAULT_HEIGHT: self.config.get(CONF_DEFAULT_HEIGHT),
-                CONF_MAX_POSITION: self.config.get(CONF_MAX_POSITION),
-                CONF_MIN_POSITION: self.config.get(CONF_MIN_POSITION),
-                CONF_FOV_LEFT: self.config.get(CONF_FOV_LEFT),
-                CONF_FOV_RIGHT: self.config.get(CONF_FOV_RIGHT),
-                CONF_ENTITIES: self.config.get(CONF_ENTITIES),
-                CONF_INVERSE_STATE: self.config.get(CONF_INVERSE_STATE),
-                CONF_SUNSET_POS: self.config.get(CONF_SUNSET_POS),
-                CONF_SUNSET_OFFSET: self.config.get(CONF_SUNSET_OFFSET),
-                CONF_SUNRISE_OFFSET: self.config.get(CONF_SUNRISE_OFFSET),
-                CONF_LENGTH_AWNING: self.config.get(CONF_LENGTH_AWNING),
-                CONF_AWNING_ANGLE: self.config.get(CONF_AWNING_ANGLE),
-                CONF_TILT_DISTANCE: self.config.get(CONF_TILT_DISTANCE),
-                CONF_TILT_DEPTH: self.config.get(CONF_TILT_DEPTH),
-                CONF_TILT_MODE: self.config.get(CONF_TILT_MODE),
-                CONF_TEMP_ENTITY: self.config.get(CONF_TEMP_ENTITY),
-                CONF_PRESENCE_ENTITY: self.config.get(CONF_PRESENCE_ENTITY),
-                CONF_WEATHER_ENTITY: self.config.get(CONF_WEATHER_ENTITY),
-                CONF_TEMP_LOW: self.config.get(CONF_TEMP_LOW),
-                CONF_TEMP_HIGH: self.config.get(CONF_TEMP_HIGH),
-                CONF_OUTSIDETEMP_ENTITY: self.config.get(CONF_OUTSIDETEMP_ENTITY),
-                CONF_CLIMATE_MODE: self.config.get(CONF_CLIMATE_MODE),
-                CONF_WEATHER_STATE: self.config.get(CONF_WEATHER_STATE),
-                CONF_DELTA_POSITION: self.config.get(CONF_DELTA_POSITION),
-                CONF_DELTA_TIME: self.config.get(CONF_DELTA_TIME),
-                CONF_START_TIME: self.config.get(CONF_START_TIME),
-                CONF_START_ENTITY: self.config.get(CONF_START_ENTITY),
-                CONF_MANUAL_THRESHOLD: self.config.get(CONF_MANUAL_THRESHOLD),
-                CONF_RESET_AT_MIDNIGHT: self.config.get(CONF_RESET_AT_MIDNIGHT, True),
-                CONF_MANUAL_IGNORE_INTERMEDIATE: self.config.get(
-                    CONF_MANUAL_IGNORE_INTERMEDIATE
-                ),
-                CONF_BLIND_SPOT_RIGHT: self.config.get(CONF_BLIND_SPOT_RIGHT, None),
-                CONF_BLIND_SPOT_LEFT: self.config.get(CONF_BLIND_SPOT_LEFT, None),
-                CONF_BLIND_SPOT_ELEVATION: self.config.get(
-                    CONF_BLIND_SPOT_ELEVATION, None
-                ),
-                CONF_ENABLE_BLIND_SPOT: self.config.get(CONF_ENABLE_BLIND_SPOT),
-                CONF_MIN_ELEVATION: self.config.get(CONF_MIN_ELEVATION, None),
-                CONF_MAX_ELEVATION: self.config.get(CONF_MAX_ELEVATION, None),
-                CONF_TRANSPARENT_BLIND: self.config.get(CONF_TRANSPARENT_BLIND, False),
-                CONF_INTERP: self.config.get(CONF_INTERP),
-                CONF_INTERP_START: self.config.get(CONF_INTERP_START, None),
-                CONF_INTERP_END: self.config.get(CONF_INTERP_END, None),
-                CONF_INTERP_LIST: self.config.get(CONF_INTERP_LIST, []),
-                CONF_INTERP_LIST_NEW: self.config.get(CONF_INTERP_LIST_NEW, []),
-                CONF_LUX_ENTITY: self.config.get(CONF_LUX_ENTITY),
-                CONF_LUX_THRESHOLD: self.config.get(CONF_LUX_THRESHOLD),
-                CONF_IRRADIANCE_ENTITY: self.config.get(CONF_IRRADIANCE_ENTITY),
-                CONF_IRRADIANCE_THRESHOLD: self.config.get(CONF_IRRADIANCE_THRESHOLD),
-                CONF_OUTSIDE_THRESHOLD: self.config.get(CONF_OUTSIDE_THRESHOLD),
-                CONF_CLOUD_ENTITY: self.config.get(CONF_CLOUD_ENTITY),
-                CONF_CLOUD_THRESHOLD: self.config.get(CONF_CLOUD_THRESHOLD),
-            },
+            title=title,
+            data=entry_data,
+            options=options,
         )
 
 
@@ -686,21 +894,85 @@ class OptionsFlowHandler(OptionsFlow):
         self.sensor_type: SensorType = (
             self.current_config.get(CONF_SENSOR_TYPE) or SensorType.BLIND
         )
+        self.entry_type = self.current_config.get(CONF_ENTRY_TYPE, EntryType.COVER)
+        self.room_id = self.current_config.get(CONF_ROOM_ID)
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage the options."""
-        options = ["automation", "blind"]
-        if self.options[CONF_CLIMATE_MODE]:
-            options.append("climate")
-        if self.options.get(CONF_WEATHER_ENTITY):
-            options.append("weather")
+        # Room entry - show room-specific options
+        if self.entry_type == EntryType.ROOM:
+            options = ["room_automation", "room_climate"]
+            if self.options.get(CONF_WEATHER_ENTITY):
+                options.append("room_weather")
+            return self.async_show_menu(step_id="init", menu_options=options)
+
+        # Cover entry (standalone or part of room)
+        options = ["blind"]
+
+        # Only show automation/climate options for standalone covers
+        if not self.room_id:
+            options.insert(0, "automation")
+            if self.options.get(CONF_CLIMATE_MODE):
+                options.append("climate")
+            if self.options.get(CONF_WEATHER_ENTITY):
+                options.append("weather")
+
         if self.options.get(CONF_ENABLE_BLIND_SPOT):
             options.append("blind_spot")
         if self.options.get(CONF_INTERP):
             options.append("interp")
         return self.async_show_menu(step_id="init", menu_options=options)
+
+    async def async_step_room_automation(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Manage room automation options."""
+        if user_input is not None:
+            entities = [CONF_START_ENTITY, CONF_END_ENTITY, CONF_MANUAL_THRESHOLD]
+            self.optional_entities(entities, user_input)
+            self.options.update(user_input)
+            return await self._update_options()
+        return self.async_show_form(
+            step_id="room_automation",
+            data_schema=self.add_suggested_values_to_schema(
+                AUTOMATION_CONFIG, user_input or self.options
+            ),
+        )
+
+    async def async_step_room_climate(self, user_input: dict[str, Any] | None = None):
+        """Manage room climate options."""
+        if user_input is not None:
+            entities = [
+                CONF_OUTSIDETEMP_ENTITY,
+                CONF_WEATHER_ENTITY,
+                CONF_PRESENCE_ENTITY,
+                CONF_LUX_ENTITY,
+                CONF_IRRADIANCE_ENTITY,
+                CONF_CLOUD_ENTITY,
+            ]
+            self.optional_entities(entities, user_input)
+            self.options.update(user_input)
+            return await self._update_options()
+        return self.async_show_form(
+            step_id="room_climate",
+            data_schema=self.add_suggested_values_to_schema(
+                CLIMATE_OPTIONS, user_input or self.options
+            ),
+        )
+
+    async def async_step_room_weather(self, user_input: dict[str, Any] | None = None):
+        """Manage room weather conditions."""
+        if user_input is not None:
+            self.options.update(user_input)
+            return await self._update_options()
+        return self.async_show_form(
+            step_id="room_weather",
+            data_schema=self.add_suggested_values_to_schema(
+                WEATHER_OPTIONS, user_input or self.options
+            ),
+        )
 
     async def async_step_automation(self, user_input: dict[str, Any] | None = None):
         """Manage automation options."""

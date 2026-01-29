@@ -96,3 +96,95 @@ class SensorType:
     BLIND = "cover_blind"
     AWNING = "cover_awning"
     TILT = "cover_tilt"
+
+
+# Entry type constants for room/cover distinction
+CONF_ENTRY_TYPE = "entry_type"
+CONF_ROOM_ID = "room_id"
+
+
+class EntryType:
+    """Entry types for the integration."""
+
+    ROOM = "room"
+    COVER = "cover"
+
+
+# Options shared at room level (climate sensors, automation, thresholds)
+ROOM_SHARED_OPTIONS = [
+    # Climate sensors
+    CONF_TEMP_ENTITY,
+    CONF_PRESENCE_ENTITY,
+    CONF_WEATHER_ENTITY,
+    CONF_LUX_ENTITY,
+    CONF_IRRADIANCE_ENTITY,
+    CONF_CLOUD_ENTITY,
+    CONF_OUTSIDETEMP_ENTITY,
+    # Climate thresholds
+    CONF_TEMP_LOW,
+    CONF_TEMP_HIGH,
+    CONF_LUX_THRESHOLD,
+    CONF_IRRADIANCE_THRESHOLD,
+    CONF_OUTSIDE_THRESHOLD,
+    CONF_CLOUD_THRESHOLD,
+    CONF_WEATHER_STATE,
+    CONF_TRANSPARENT_BLIND,
+    CONF_CLIMATE_MODE,
+    # Automation settings
+    CONF_DELTA_POSITION,
+    CONF_DELTA_TIME,
+    CONF_START_TIME,
+    CONF_START_ENTITY,
+    CONF_END_TIME,
+    CONF_END_ENTITY,
+    CONF_RETURN_SUNSET,
+    CONF_MANUAL_THRESHOLD,
+    CONF_MANUAL_IGNORE_INTERMEDIATE,
+    CONF_RESET_AT_MIDNIGHT,
+]
+
+# Options specific to each cover (geometry, type-specific, limits)
+COVER_SPECIFIC_OPTIONS = [
+    # Cover entities
+    CONF_ENTITIES,
+    # Window geometry
+    CONF_AZIMUTH,
+    CONF_HEIGHT_WIN,
+    CONF_DISTANCE,
+    CONF_COVER_BOTTOM,
+    CONF_SHADED_AREA_HEIGHT,
+    CONF_FOV_LEFT,
+    CONF_FOV_RIGHT,
+    # Awning-specific
+    CONF_LENGTH_AWNING,
+    CONF_AWNING_ANGLE,
+    CONF_HEIGHT_AWNING,
+    # Tilt-specific
+    CONF_TILT_DEPTH,
+    CONF_TILT_DISTANCE,
+    CONF_TILT_MODE,
+    # Position limits
+    CONF_MAX_POSITION,
+    CONF_MIN_POSITION,
+    CONF_ENABLE_MAX_POSITION,
+    CONF_ENABLE_MIN_POSITION,
+    CONF_MIN_ELEVATION,
+    CONF_MAX_ELEVATION,
+    # Blind spot
+    CONF_ENABLE_BLIND_SPOT,
+    CONF_BLIND_SPOT_LEFT,
+    CONF_BLIND_SPOT_RIGHT,
+    CONF_BLIND_SPOT_ELEVATION,
+    # Position modifiers
+    CONF_INVERSE_STATE,
+    CONF_SUNSET_POS,
+    CONF_SUNSET_OFFSET,
+    CONF_SUNRISE_OFFSET,
+    CONF_DEFAULT_HEIGHT,
+    # Interpolation
+    CONF_INTERP,
+    CONF_INTERP_START,
+    CONF_INTERP_END,
+    CONF_INTERP_LIST,
+    CONF_INTERP_LIST_NEW,
+]

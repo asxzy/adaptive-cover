@@ -15,8 +15,11 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import CONF_ENTRY_TYPE, CONF_ROOM_ID, DOMAIN, EntryType
 from .coordinator import AdaptiveDataUpdateCoordinator
+from .room_coordinator import RoomCoordinator
+
+CoordinatorType = AdaptiveDataUpdateCoordinator | RoomCoordinator
 
 
 async def async_setup_entry(
@@ -25,43 +28,75 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Adaptive Cover binary sensor platform."""
-    coordinator: AdaptiveDataUpdateCoordinator = hass.data[DOMAIN][
-        config_entry.entry_id
-    ]
+    coordinator: CoordinatorType = hass.data[DOMAIN][config_entry.entry_id]
+    entry_type = config_entry.data.get(CONF_ENTRY_TYPE)
+    room_id = config_entry.data.get(CONF_ROOM_ID)
 
-    binary_sensor = AdaptiveCoverBinarySensor(
-        config_entry,
-        config_entry.entry_id,
-        "Sun Infront",
-        False,
-        "sun_motion",
-        BinarySensorDeviceClass.MOTION,
-        coordinator,
-    )
-    is_presence = AdaptiveCoverBinarySensor(
-        config_entry,
-        config_entry.entry_id,
-        "Room Occupied",
-        False,
-        "is_presence",
-        BinarySensorDeviceClass.OCCUPANCY,
-        coordinator,
-    )
-    has_direct_sun = AdaptiveCoverBinarySensor(
-        config_entry,
-        config_entry.entry_id,
-        "Weather Has Direct Sun",
-        False,
-        "has_direct_sun",
-        BinarySensorDeviceClass.LIGHT,
-        coordinator,
-    )
-    async_add_entities([binary_sensor, is_presence, has_direct_sun])
+    entities = []
+
+    # Room entry - presence and weather sensors
+    if entry_type == EntryType.ROOM:
+        is_presence = AdaptiveCoverBinarySensor(
+            config_entry,
+            config_entry.entry_id,
+            "Room Occupied",
+            False,
+            "is_presence",
+            BinarySensorDeviceClass.OCCUPANCY,
+            coordinator,
+            is_room=True,
+        )
+        has_direct_sun = AdaptiveCoverBinarySensor(
+            config_entry,
+            config_entry.entry_id,
+            "Weather Has Direct Sun",
+            False,
+            "has_direct_sun",
+            BinarySensorDeviceClass.LIGHT,
+            coordinator,
+            is_room=True,
+        )
+        entities.extend([is_presence, has_direct_sun])
+
+    # Cover entry (standalone or part of room) - sun motion sensor
+    else:
+        binary_sensor = AdaptiveCoverBinarySensor(
+            config_entry,
+            config_entry.entry_id,
+            "Sun Infront",
+            False,
+            "sun_motion",
+            BinarySensorDeviceClass.MOTION,
+            coordinator,
+        )
+        entities.append(binary_sensor)
+
+        # Standalone cover also gets presence and weather sensors
+        if not room_id:
+            is_presence = AdaptiveCoverBinarySensor(
+                config_entry,
+                config_entry.entry_id,
+                "Room Occupied",
+                False,
+                "is_presence",
+                BinarySensorDeviceClass.OCCUPANCY,
+                coordinator,
+            )
+            has_direct_sun = AdaptiveCoverBinarySensor(
+                config_entry,
+                config_entry.entry_id,
+                "Weather Has Direct Sun",
+                False,
+                "has_direct_sun",
+                BinarySensorDeviceClass.LIGHT,
+                coordinator,
+            )
+            entities.extend([is_presence, has_direct_sun])
+
+    async_add_entities(entities)
 
 
-class AdaptiveCoverBinarySensor(
-    CoordinatorEntity[AdaptiveDataUpdateCoordinator], BinarySensorEntity
-):
+class AdaptiveCoverBinarySensor(CoordinatorEntity[CoordinatorType], BinarySensorEntity):
     """representation of a Adaptive Cover binary sensor."""
 
     _attr_has_entity_name = True
@@ -75,7 +110,8 @@ class AdaptiveCoverBinarySensor(
         state: bool,
         key: str,
         device_class: BinarySensorDeviceClass,
-        coordinator: AdaptiveDataUpdateCoordinator,
+        coordinator: CoordinatorType,
+        is_room: bool = False,
     ) -> None:
         """Initialize the binary sensor."""
         super().__init__(coordinator=coordinator)
@@ -87,14 +123,32 @@ class AdaptiveCoverBinarySensor(
         self._device_id = unique_id
         self._state = state
         self._attr_device_class = device_class
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, self._device_id)},
-            name=self._name,
-        )
+        self._is_room = is_room
+
+        # Set device info based on entry type
+        if is_room:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"room_{self._device_id}")},
+                name=f"Room: {self._name}",
+            )
+        else:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, self._device_id)},
+                name=self._name,
+            )
 
     @property
     def is_on(self) -> bool | None:
         """Return true if the binary sensor is on."""
+        # For room coordinator, data might not have states in same format
+        if isinstance(self.coordinator, RoomCoordinator):
+            if self.coordinator.data is None:
+                return None
+            if self._key == "is_presence":
+                return self.coordinator.data.is_presence
+            if self._key == "has_direct_sun":
+                return self.coordinator.data.has_direct_sun
+            return None
         return self.coordinator.data.states[self._key]
 
     @property
@@ -103,7 +157,20 @@ class AdaptiveCoverBinarySensor(
         # Check if coordinator is available first
         if not super().available:
             return False
-        # For sensors that depend on external entities, check availability status
+
+        # For room coordinator
+        if isinstance(self.coordinator, RoomCoordinator):
+            if self.coordinator.data is None:
+                return False
+            if self._key == "has_direct_sun":
+                return self.coordinator.data.sensor_available.get(
+                    "has_direct_sun", True
+                )
+            if self._key == "is_presence":
+                return self.coordinator.data.sensor_available.get("is_presence", True)
+            return True
+
+        # For cover coordinator - check availability status
         if self._key == "has_direct_sun":
             return self.coordinator.data.states.get("has_direct_sun_available", True)
         if self._key == "is_presence":
@@ -112,6 +179,33 @@ class AdaptiveCoverBinarySensor(
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:  # noqa: D102
+        # For room coordinator
+        if isinstance(self.coordinator, RoomCoordinator):
+            if self.coordinator.data is None:
+                return None
+            if self._key == "has_direct_sun":
+                return {
+                    "sensor_available": self.coordinator.data.sensor_available.get(
+                        "has_direct_sun"
+                    ),
+                    "using_last_known": not self.coordinator.data.sensor_available.get(
+                        "has_direct_sun", True
+                    ),
+                    "current_value": self.coordinator.data.has_direct_sun,
+                }
+            if self._key == "is_presence":
+                return {
+                    "sensor_available": self.coordinator.data.sensor_available.get(
+                        "is_presence"
+                    ),
+                    "using_last_known": not self.coordinator.data.sensor_available.get(
+                        "is_presence", True
+                    ),
+                    "current_value": self.coordinator.data.is_presence,
+                }
+            return None
+
+        # For cover coordinator
         if self._key == "has_direct_sun":
             return {
                 "sensor_available": self.coordinator.data.states.get(

@@ -16,14 +16,19 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import (
     CONF_CLIMATE_MODE,
     CONF_CLOUD_ENTITY,
+    CONF_ENTRY_TYPE,
     CONF_IRRADIANCE_ENTITY,
     CONF_LUX_ENTITY,
     CONF_OUTSIDETEMP_ENTITY,
     CONF_WEATHER_ENTITY,
     CONTROL_MODE_AUTO,
     DOMAIN,
+    EntryType,
 )
 from .coordinator import AdaptiveDataUpdateCoordinator
+from .room_coordinator import RoomCoordinator
+
+CoordinatorType = AdaptiveDataUpdateCoordinator | RoomCoordinator
 
 
 async def async_setup_entry(
@@ -32,9 +37,11 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the switch platform."""
-    coordinator: AdaptiveDataUpdateCoordinator = hass.data[DOMAIN][
-        config_entry.entry_id
-    ]
+    coordinator: CoordinatorType = hass.data[DOMAIN][config_entry.entry_id]
+    entry_type = config_entry.data.get(CONF_ENTRY_TYPE)
+
+    # Determine if this is a room entry
+    is_room = entry_type == EntryType.ROOM
 
     # Sensor toggle switches (only functional in AUTO mode)
     temp_switch = AdaptiveCoverSwitch(
@@ -44,6 +51,7 @@ async def async_setup_entry(
         False,
         "temp_toggle",
         coordinator,
+        is_room=is_room,
     )
     lux_switch = AdaptiveCoverSwitch(
         config_entry,
@@ -52,6 +60,7 @@ async def async_setup_entry(
         True,
         "lux_toggle",
         coordinator,
+        is_room=is_room,
     )
     irradiance_switch = AdaptiveCoverSwitch(
         config_entry,
@@ -60,6 +69,7 @@ async def async_setup_entry(
         True,
         "irradiance_toggle",
         coordinator,
+        is_room=is_room,
     )
     cloud_switch = AdaptiveCoverSwitch(
         config_entry,
@@ -68,6 +78,7 @@ async def async_setup_entry(
         True,
         "cloud_toggle",
         coordinator,
+        is_room=is_room,
     )
     weather_switch = AdaptiveCoverSwitch(
         config_entry,
@@ -76,9 +87,13 @@ async def async_setup_entry(
         True,
         "weather_toggle",
         coordinator,
+        is_room=is_room,
     )
 
-    climate_mode = config_entry.options.get(CONF_CLIMATE_MODE)
+    # Room entries always have climate mode enabled
+    climate_mode = (
+        True if is_room else config_entry.options.get(CONF_CLIMATE_MODE, False)
+    )
     weather_entity = config_entry.options.get(CONF_WEATHER_ENTITY)
     sensor_entity = config_entry.options.get(CONF_OUTSIDETEMP_ENTITY)
     lux_entity = config_entry.options.get(CONF_LUX_ENTITY)
@@ -104,7 +119,7 @@ async def async_setup_entry(
 
 
 class AdaptiveCoverSwitch(
-    CoordinatorEntity[AdaptiveDataUpdateCoordinator], SwitchEntity, RestoreEntity
+    CoordinatorEntity[CoordinatorType], SwitchEntity, RestoreEntity
 ):
     """Representation of a adaptive cover switch."""
 
@@ -118,8 +133,9 @@ class AdaptiveCoverSwitch(
         switch_name: str,
         initial_state: bool,
         key: str,
-        coordinator: AdaptiveDataUpdateCoordinator,
+        coordinator: CoordinatorType,
         device_class: SwitchDeviceClass | None = None,
+        is_room: bool = False,
     ) -> None:
         """Initialize the switch."""
         super().__init__(coordinator=coordinator)
@@ -132,10 +148,19 @@ class AdaptiveCoverSwitch(
         self._initial_state = initial_state
         self._attr_unique_id = f"{unique_id}_{switch_name}"
         self._device_id = unique_id
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, self._device_id)},
-            name=self._name,
-        )
+        self._is_room = is_room
+
+        # Set device info based on entry type
+        if is_room:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"room_{self._device_id}")},
+                name=f"Room: {self._name}",
+            )
+        else:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, self._device_id)},
+                name=self._name,
+            )
 
         self.coordinator.logger.debug("Setup switch")
 
@@ -157,8 +182,15 @@ class AdaptiveCoverSwitch(
         self.coordinator.logger.debug("Turning on %s", self._key)
         self._attr_is_on = True
         setattr(self.coordinator, self._key, True)
-        self.coordinator.state_change = True
-        await self.coordinator.async_refresh()
+
+        # For room coordinator, notify children
+        if isinstance(self.coordinator, RoomCoordinator):
+            await self.coordinator.async_refresh()
+            await self.coordinator.async_notify_children()
+        else:
+            self.coordinator.state_change = True
+            await self.coordinator.async_refresh()
+
         self.schedule_update_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -166,8 +198,15 @@ class AdaptiveCoverSwitch(
         self.coordinator.logger.debug("Turning off %s", self._key)
         self._attr_is_on = False
         setattr(self.coordinator, self._key, False)
-        self.coordinator.state_change = True
-        await self.coordinator.async_refresh()
+
+        # For room coordinator, notify children
+        if isinstance(self.coordinator, RoomCoordinator):
+            await self.coordinator.async_refresh()
+            await self.coordinator.async_notify_children()
+        else:
+            self.coordinator.state_change = True
+            await self.coordinator.async_refresh()
+
         self.schedule_update_ha_state()
 
     async def async_added_to_hass(self) -> None:

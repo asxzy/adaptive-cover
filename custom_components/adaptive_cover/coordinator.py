@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytz
@@ -29,6 +30,9 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.template import state_attr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+
+if TYPE_CHECKING:
+    from .room_coordinator import RoomCoordinator
 
 from .config_context_adapter import ConfigContextAdapter
 
@@ -108,6 +112,7 @@ from .const import (
     CONTROL_MODE_FORCE,
     DOMAIN,
     LOGGER,
+    ROOM_SHARED_OPTIONS,
 )
 from .helpers import get_datetime_from_str, get_last_updated, get_safe_state
 
@@ -139,30 +144,42 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
     config_entry: ConfigEntry
 
-    def __init__(self, hass: HomeAssistant) -> None:  # noqa: D107
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        room_coordinator: RoomCoordinator | None = None,
+    ) -> None:
+        """Initialize the coordinator."""
         super().__init__(hass, LOGGER, name=DOMAIN)
 
         self.logger = ConfigContextAdapter(_LOGGER)
         self.logger.set_config_name(self.config_entry.data.get("name"))
+
+        # Room coordinator reference (None for standalone covers)
+        self._room_coordinator = room_coordinator
+
         self._cover_type = self.config_entry.data.get("sensor_type")
-        self._climate_mode = self.config_entry.options.get(CONF_CLIMATE_MODE, False)
+        self._climate_mode = self._get_option(CONF_CLIMATE_MODE, False)
         self._inverse_state = self.config_entry.options.get(CONF_INVERSE_STATE, False)
         self._use_interpolation = self.config_entry.options.get(CONF_INTERP, False)
-        self._track_end_time = self.config_entry.options.get(CONF_RETURN_SUNSET)
+        self._track_end_time = self._get_option(CONF_RETURN_SUNSET)
+
+        # Sensor toggles - only used for standalone covers (room manages these otherwise)
         self._temp_toggle = None
         self._lux_toggle = None
         self._irradiance_toggle = None
         self._cloud_toggle = None
         self._weather_toggle = None
+
         self._start_time = None
         self._sun_end_time = None
         self._sun_start_time = None
-        # Control mode: "off", "on", "auto"
+
+        # Control mode: "off", "on", "auto" - only used for standalone covers
         self._control_mode = CONTROL_MODE_AUTO
-        self._reset_at_midnight = self.config_entry.options.get(
-            CONF_RESET_AT_MIDNIGHT, True
-        )
+        self._reset_at_midnight = self._get_option(CONF_RESET_AT_MIDNIGHT, True)
         self._midnight_unsub = None
+
         self.state_change = False
         self.cover_state_change = False
         self.first_refresh = False
@@ -173,7 +190,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self.manager = AdaptiveCoverManager(self.logger, self)
         self.wait_for_target = {}
         self.target_call = {}
-        self.ignore_intermediate_states = self.config_entry.options.get(
+        self.ignore_intermediate_states = self._get_option(
             CONF_MANUAL_IGNORE_INTERMEDIATE, False
         )
         self._update_listener = None
@@ -182,7 +199,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self._cached_options = None
 
         # Last known sensor values for graceful degradation
-        # These are persisted across HA restarts
+        # These are persisted across HA restarts (only for standalone covers)
         self._last_known: dict[str, bool | None] = {
             "has_direct_sun": None,
             "is_presence": None,
@@ -200,6 +217,22 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             STORAGE_VERSION,
             f"{STORAGE_KEY_PREFIX}.{self.config_entry.entry_id}",
         )
+
+    def _get_option(self, key: str, default=None):
+        """Get option from room if available for shared options, else from own config."""
+        if self._room_coordinator and key in ROOM_SHARED_OPTIONS:
+            return self._room_coordinator.get_option(key, default)
+        return self.config_entry.options.get(key, default)
+
+    @property
+    def has_room(self) -> bool:
+        """Check if this cover is part of a room."""
+        return self._room_coordinator is not None
+
+    @property
+    def room_coordinator(self) -> RoomCoordinator | None:
+        """Get the room coordinator if this cover is part of a room."""
+        return self._room_coordinator
 
     async def async_config_entry_first_refresh(self) -> None:
         """Config entry first refresh."""
@@ -420,6 +453,11 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
     def setup_midnight_reset(self) -> None:
         """Set up midnight reset listener."""
+        # If part of a room, delegate to room coordinator
+        if self._room_coordinator:
+            self._room_coordinator.setup_midnight_reset()
+            return
+
         if self._midnight_unsub:
             self._midnight_unsub()
             self._midnight_unsub = None
@@ -703,19 +741,22 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
     def _update_options(self, options):
         """Update options."""
+        # Cover-specific options always come from own config
         self.entities = options.get(CONF_ENTITIES, [])
-        self.min_change = options.get(CONF_DELTA_POSITION, 1)
-        self.time_threshold = options.get(CONF_DELTA_TIME, 2)
-        self.start_time = options.get(CONF_START_TIME)
-        self.start_time_entity = options.get(CONF_START_ENTITY)
-        self.end_time = options.get(CONF_END_TIME)
-        self.end_time_entity = options.get(CONF_END_ENTITY)
-        self.manual_threshold = options.get(CONF_MANUAL_THRESHOLD)
-        self._reset_at_midnight = options.get(CONF_RESET_AT_MIDNIGHT, True)
         self.start_value = options.get(CONF_INTERP_START)
         self.end_value = options.get(CONF_INTERP_END)
         self.normal_list = options.get(CONF_INTERP_LIST)
         self.new_list = options.get(CONF_INTERP_LIST_NEW)
+
+        # Shared options - use _get_option to check room first
+        self.min_change = self._get_option(CONF_DELTA_POSITION, 1)
+        self.time_threshold = self._get_option(CONF_DELTA_TIME, 2)
+        self.start_time = self._get_option(CONF_START_TIME)
+        self.start_time_entity = self._get_option(CONF_START_ENTITY)
+        self.end_time = self._get_option(CONF_END_TIME)
+        self.end_time_entity = self._get_option(CONF_END_ENTITY)
+        self.manual_threshold = self._get_option(CONF_MANUAL_THRESHOLD)
+        self._reset_at_midnight = self._get_option(CONF_RESET_AT_MIDNIGHT, True)
 
     def _update_manager_and_covers(self):
         self.manager.add_covers(self.entities)
@@ -894,29 +935,30 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
 
     def get_climate_data(self, options):
         """Update climate data."""
+        # Climate data uses shared options from room if available
         return [
             self.hass,
             self.logger,
-            options.get(CONF_TEMP_ENTITY),
-            options.get(CONF_TEMP_LOW),
-            options.get(CONF_TEMP_HIGH),
-            options.get(CONF_PRESENCE_ENTITY),
-            options.get(CONF_WEATHER_ENTITY),
-            options.get(CONF_WEATHER_STATE),
-            options.get(CONF_OUTSIDETEMP_ENTITY),
-            self._temp_toggle,
+            self._get_option(CONF_TEMP_ENTITY),
+            self._get_option(CONF_TEMP_LOW),
+            self._get_option(CONF_TEMP_HIGH),
+            self._get_option(CONF_PRESENCE_ENTITY),
+            self._get_option(CONF_WEATHER_ENTITY),
+            self._get_option(CONF_WEATHER_STATE),
+            self._get_option(CONF_OUTSIDETEMP_ENTITY),
+            self.temp_toggle,  # Use property to get from room if available
             self._cover_type,
-            options.get(CONF_TRANSPARENT_BLIND),
-            options.get(CONF_LUX_ENTITY),
-            options.get(CONF_IRRADIANCE_ENTITY),
-            options.get(CONF_LUX_THRESHOLD),
-            options.get(CONF_IRRADIANCE_THRESHOLD),
-            options.get(CONF_OUTSIDE_THRESHOLD),
-            self._lux_toggle,
-            self._irradiance_toggle,
-            options.get(CONF_CLOUD_ENTITY),
-            options.get(CONF_CLOUD_THRESHOLD),
-            self._cloud_toggle,
+            self._get_option(CONF_TRANSPARENT_BLIND),
+            self._get_option(CONF_LUX_ENTITY),
+            self._get_option(CONF_IRRADIANCE_ENTITY),
+            self._get_option(CONF_LUX_THRESHOLD),
+            self._get_option(CONF_IRRADIANCE_THRESHOLD),
+            self._get_option(CONF_OUTSIDE_THRESHOLD),
+            self.lux_toggle,  # Use property to get from room if available
+            self.irradiance_toggle,  # Use property to get from room if available
+            self._get_option(CONF_CLOUD_ENTITY),
+            self._get_option(CONF_CLOUD_THRESHOLD),
+            self.cloud_toggle,  # Use property to get from room if available
         ]
 
     def climate_mode_data(self, cover_data, climate):
@@ -1005,76 +1047,113 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
     @property
     def control_mode(self):
         """Get control mode (off/on/auto)."""
+        if self._room_coordinator:
+            return self._room_coordinator.control_mode
         return self._control_mode
 
     @control_mode.setter
     def control_mode(self, value):
         """Set control mode and notify select entity."""
         if value in (CONTROL_MODE_DISABLED, CONTROL_MODE_FORCE, CONTROL_MODE_AUTO):
-            self._control_mode = value
-            self.logger.debug("Control mode set to: %s", value)
-            # Notify select entity if it exists
-            if hasattr(self, "_control_mode_select") and self._control_mode_select:
-                self._control_mode_select.set_control_mode(value)
+            if self._room_coordinator:
+                self._room_coordinator.control_mode = value
+            else:
+                self._control_mode = value
+                self.logger.debug("Control mode set to: %s", value)
+                # Notify select entity if it exists
+                if hasattr(self, "_control_mode_select") and self._control_mode_select:
+                    self._control_mode_select.set_control_mode(value)
 
     def register_control_mode_select(self, select_entity):
         """Register the control mode select entity for callbacks."""
-        self._control_mode_select = select_entity
+        if self._room_coordinator:
+            self._room_coordinator.register_control_mode_select(select_entity)
+        else:
+            self._control_mode_select = select_entity
 
     @property
     def is_control_enabled(self):
         """Check if control is enabled (mode is not OFF)."""
+        if self._room_coordinator:
+            return self._room_coordinator.is_control_enabled
         return self._control_mode != CONTROL_MODE_DISABLED
 
     @property
     def is_climate_mode(self):
         """Check if climate mode is active (mode is AUTO)."""
+        if self._room_coordinator:
+            return self._room_coordinator.is_climate_mode
         return self._control_mode == CONTROL_MODE_AUTO
 
     @property
     def temp_toggle(self):
         """Let switch toggle between inside or outside temperature."""
+        if self._room_coordinator:
+            return self._room_coordinator.temp_toggle
         return self._temp_toggle
 
     @temp_toggle.setter
     def temp_toggle(self, value):
-        self._temp_toggle = value
+        if self._room_coordinator:
+            self._room_coordinator.temp_toggle = value
+        else:
+            self._temp_toggle = value
 
     @property
     def lux_toggle(self):
         """Toggle automation."""
+        if self._room_coordinator:
+            return self._room_coordinator.lux_toggle
         return self._lux_toggle
 
     @lux_toggle.setter
     def lux_toggle(self, value):
-        self._lux_toggle = value
+        if self._room_coordinator:
+            self._room_coordinator.lux_toggle = value
+        else:
+            self._lux_toggle = value
 
     @property
     def irradiance_toggle(self):
         """Toggle automation."""
+        if self._room_coordinator:
+            return self._room_coordinator.irradiance_toggle
         return self._irradiance_toggle
 
     @irradiance_toggle.setter
     def irradiance_toggle(self, value):
-        self._irradiance_toggle = value
+        if self._room_coordinator:
+            self._room_coordinator.irradiance_toggle = value
+        else:
+            self._irradiance_toggle = value
 
     @property
     def cloud_toggle(self):
         """Toggle cloud coverage check."""
+        if self._room_coordinator:
+            return self._room_coordinator.cloud_toggle
         return self._cloud_toggle
 
     @cloud_toggle.setter
     def cloud_toggle(self, value):
-        self._cloud_toggle = value
+        if self._room_coordinator:
+            self._room_coordinator.cloud_toggle = value
+        else:
+            self._cloud_toggle = value
 
     @property
     def weather_toggle(self):
         """Toggle weather check."""
+        if self._room_coordinator:
+            return self._room_coordinator.weather_toggle
         return self._weather_toggle
 
     @weather_toggle.setter
     def weather_toggle(self, value):
-        self._weather_toggle = value
+        if self._room_coordinator:
+            self._room_coordinator.weather_toggle = value
+        else:
+            self._weather_toggle = value
 
 
 class AdaptiveCoverManager:

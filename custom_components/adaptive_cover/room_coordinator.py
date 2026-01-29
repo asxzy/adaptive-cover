@@ -1,0 +1,402 @@
+"""Room Coordinator for Adaptive Cover integration."""
+
+from __future__ import annotations
+
+import datetime as dt
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers.storage import Store
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+
+from .config_context_adapter import ConfigContextAdapter
+from .const import (
+    _LOGGER,
+    CONF_CLIMATE_MODE,
+    CONF_CLOUD_ENTITY,
+    CONF_CLOUD_THRESHOLD,
+    CONF_DELTA_POSITION,
+    CONF_DELTA_TIME,
+    CONF_END_ENTITY,
+    CONF_END_TIME,
+    CONF_IRRADIANCE_ENTITY,
+    CONF_IRRADIANCE_THRESHOLD,
+    CONF_LUX_ENTITY,
+    CONF_LUX_THRESHOLD,
+    CONF_MANUAL_IGNORE_INTERMEDIATE,
+    CONF_MANUAL_THRESHOLD,
+    CONF_OUTSIDE_THRESHOLD,
+    CONF_OUTSIDETEMP_ENTITY,
+    CONF_PRESENCE_ENTITY,
+    CONF_RESET_AT_MIDNIGHT,
+    CONF_RETURN_SUNSET,
+    CONF_START_ENTITY,
+    CONF_START_TIME,
+    CONF_TEMP_ENTITY,
+    CONF_TEMP_HIGH,
+    CONF_TEMP_LOW,
+    CONF_TRANSPARENT_BLIND,
+    CONF_WEATHER_ENTITY,
+    CONF_WEATHER_STATE,
+    CONTROL_MODE_AUTO,
+    CONTROL_MODE_DISABLED,
+    CONTROL_MODE_FORCE,
+    DOMAIN,
+    LOGGER,
+)
+
+if TYPE_CHECKING:
+    from .coordinator import AdaptiveDataUpdateCoordinator
+
+# Storage constants for persisting last known sensor values
+STORAGE_VERSION = 1
+STORAGE_KEY_PREFIX = "adaptive_cover_room"
+
+
+@dataclass
+class RoomData:
+    """Shared room data passed to cover coordinators."""
+
+    control_mode: str
+    temp_toggle: bool | None
+    lux_toggle: bool | None
+    irradiance_toggle: bool | None
+    cloud_toggle: bool | None
+    weather_toggle: bool | None
+    is_presence: bool | None
+    has_direct_sun: bool | None
+    climate_data_args: list | None = None
+    # Sensor availability for graceful degradation
+    sensor_available: dict = field(default_factory=dict)
+    # Last known values for graceful degradation
+    last_known: dict = field(default_factory=dict)
+
+
+class RoomCoordinator(DataUpdateCoordinator[RoomData]):
+    """Coordinator for room-level shared state.
+
+    Manages shared sensors, control mode, and toggles for all covers in a room.
+    """
+
+    config_entry: ConfigEntry
+
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+        """Initialize the room coordinator."""
+        super().__init__(hass, LOGGER, name=f"{DOMAIN}_room")
+
+        self.config_entry = config_entry
+        self.logger = ConfigContextAdapter(_LOGGER)
+        self.logger.set_config_name(f"Room: {config_entry.data.get('name')}")
+
+        # Child cover coordinators
+        self._child_coordinators: list[AdaptiveDataUpdateCoordinator] = []
+
+        # Control mode
+        self._control_mode = CONTROL_MODE_AUTO
+        self._reset_at_midnight = config_entry.options.get(CONF_RESET_AT_MIDNIGHT, True)
+        self._midnight_unsub = None
+
+        # Sensor toggles (shared across all covers in the room)
+        self._temp_toggle: bool | None = None
+        self._lux_toggle: bool | None = None
+        self._irradiance_toggle: bool | None = None
+        self._cloud_toggle: bool | None = None
+        self._weather_toggle: bool | None = None
+
+        # Automation settings
+        self._climate_mode = config_entry.options.get(CONF_CLIMATE_MODE, False)
+        self._track_end_time = config_entry.options.get(CONF_RETURN_SUNSET)
+
+        # Control mode select entity reference
+        self._control_mode_select = None
+
+        # Last known sensor values for graceful degradation
+        self._last_known: dict[str, bool | None] = {
+            "has_direct_sun": None,
+            "is_presence": None,
+            "lux": None,
+            "irradiance": None,
+            "cloud": None,
+        }
+        self._sensor_available: dict[str, bool] = {
+            "has_direct_sun": True,
+            "is_presence": True,
+        }
+        self._store = Store(
+            hass,
+            STORAGE_VERSION,
+            f"{STORAGE_KEY_PREFIX}.{config_entry.entry_id}",
+        )
+
+        # Cached options
+        self._cached_options = None
+
+    def register_cover(self, cover_coordinator: AdaptiveDataUpdateCoordinator) -> None:
+        """Register a child cover coordinator."""
+        if cover_coordinator not in self._child_coordinators:
+            self._child_coordinators.append(cover_coordinator)
+            self.logger.debug(
+                "Registered cover coordinator, total: %d", len(self._child_coordinators)
+            )
+
+    def unregister_cover(
+        self, cover_coordinator: AdaptiveDataUpdateCoordinator
+    ) -> None:
+        """Unregister a child cover coordinator."""
+        if cover_coordinator in self._child_coordinators:
+            self._child_coordinators.remove(cover_coordinator)
+            self.logger.debug(
+                "Unregistered cover coordinator, remaining: %d",
+                len(self._child_coordinators),
+            )
+
+    async def async_config_entry_first_refresh(self) -> None:
+        """Config entry first refresh."""
+        await self._async_load_last_known()
+        await super().async_config_entry_first_refresh()
+        self.logger.debug("Room config entry first refresh")
+
+    async def _async_load_last_known(self) -> None:
+        """Load last known sensor values from storage."""
+        data = await self._store.async_load()
+        if data:
+            self._last_known.update(data)
+            self.logger.debug("Loaded last known values from storage: %s", data)
+
+    async def _async_save_last_known(self) -> None:
+        """Save last known sensor values to storage."""
+        await self._store.async_save(self._last_known)
+        self.logger.debug("Saved last known values to storage: %s", self._last_known)
+
+    async def _async_update_data(self) -> RoomData:
+        """Update room-level shared data."""
+        self.logger.debug("Updating room data")
+        options = self.config_entry.options
+
+        # Build climate data arguments for child coordinators
+        climate_data_args = self._get_climate_data_args(options)
+
+        return RoomData(
+            control_mode=self._control_mode,
+            temp_toggle=self._temp_toggle,
+            lux_toggle=self._lux_toggle,
+            irradiance_toggle=self._irradiance_toggle,
+            cloud_toggle=self._cloud_toggle,
+            weather_toggle=self._weather_toggle,
+            is_presence=self._last_known.get("is_presence"),
+            has_direct_sun=self._last_known.get("has_direct_sun"),
+            climate_data_args=climate_data_args,
+            sensor_available=self._sensor_available.copy(),
+            last_known=self._last_known.copy(),
+        )
+
+    def _get_climate_data_args(self, options) -> list:
+        """Get climate data arguments for ClimateCoverData construction."""
+        return [
+            self.hass,
+            self.logger,
+            options.get(CONF_TEMP_ENTITY),
+            options.get(CONF_TEMP_LOW),
+            options.get(CONF_TEMP_HIGH),
+            options.get(CONF_PRESENCE_ENTITY),
+            options.get(CONF_WEATHER_ENTITY),
+            options.get(CONF_WEATHER_STATE),
+            options.get(CONF_OUTSIDETEMP_ENTITY),
+            self._temp_toggle,
+            None,  # cover_type - will be overridden by cover coordinator
+            options.get(CONF_TRANSPARENT_BLIND),
+            options.get(CONF_LUX_ENTITY),
+            options.get(CONF_IRRADIANCE_ENTITY),
+            options.get(CONF_LUX_THRESHOLD),
+            options.get(CONF_IRRADIANCE_THRESHOLD),
+            options.get(CONF_OUTSIDE_THRESHOLD),
+            self._lux_toggle,
+            self._irradiance_toggle,
+            options.get(CONF_CLOUD_ENTITY),
+            options.get(CONF_CLOUD_THRESHOLD),
+            self._cloud_toggle,
+        ]
+
+    async def async_notify_children(self) -> None:
+        """Notify all child cover coordinators to refresh."""
+        self.logger.debug(
+            "Notifying %d child coordinators", len(self._child_coordinators)
+        )
+        for child in self._child_coordinators:
+            child.state_change = True
+            await child.async_refresh()
+
+    async def async_check_entity_state_change(self, event) -> None:
+        """Handle state change for tracked entities."""
+        self.logger.debug("Room entity state change")
+        await self.async_refresh()
+        await self.async_notify_children()
+
+    def setup_midnight_reset(self) -> None:
+        """Set up midnight reset listener."""
+        if self._midnight_unsub:
+            self._midnight_unsub()
+            self._midnight_unsub = None
+
+        if self._reset_at_midnight:
+            self.logger.debug("Setting up midnight reset listener")
+            self._midnight_unsub = async_track_time_change(
+                self.hass,
+                self._async_midnight_reset,
+                hour=0,
+                minute=0,
+                second=0,
+            )
+
+    @callback
+    def _async_midnight_reset(self, now: dt.datetime) -> None:
+        """Reset control mode to AUTO at midnight."""
+        self.logger.info("Midnight reset: Setting control mode to AUTO")
+        self.control_mode = CONTROL_MODE_AUTO
+        self.hass.async_create_task(self.async_refresh())
+        self.hass.async_create_task(self.async_notify_children())
+
+    # Control mode property
+    @property
+    def control_mode(self) -> str:
+        """Get control mode (off/on/auto)."""
+        return self._control_mode
+
+    @control_mode.setter
+    def control_mode(self, value: str) -> None:
+        """Set control mode and notify select entity."""
+        if value in (CONTROL_MODE_DISABLED, CONTROL_MODE_FORCE, CONTROL_MODE_AUTO):
+            self._control_mode = value
+            self.logger.debug("Control mode set to: %s", value)
+            # Notify select entity if it exists
+            if self._control_mode_select:
+                self._control_mode_select.set_control_mode(value)
+
+    def register_control_mode_select(self, select_entity) -> None:
+        """Register the control mode select entity for callbacks."""
+        self._control_mode_select = select_entity
+
+    @property
+    def is_control_enabled(self) -> bool:
+        """Check if control is enabled (mode is not OFF)."""
+        return self._control_mode != CONTROL_MODE_DISABLED
+
+    @property
+    def is_climate_mode(self) -> bool:
+        """Check if climate mode is active (mode is AUTO)."""
+        return self._control_mode == CONTROL_MODE_AUTO
+
+    # Sensor toggle properties
+    @property
+    def temp_toggle(self) -> bool | None:
+        """Let switch toggle between inside or outside temperature."""
+        return self._temp_toggle
+
+    @temp_toggle.setter
+    def temp_toggle(self, value: bool | None) -> None:
+        self._temp_toggle = value
+
+    @property
+    def lux_toggle(self) -> bool | None:
+        """Toggle lux sensor."""
+        return self._lux_toggle
+
+    @lux_toggle.setter
+    def lux_toggle(self, value: bool | None) -> None:
+        self._lux_toggle = value
+
+    @property
+    def irradiance_toggle(self) -> bool | None:
+        """Toggle irradiance sensor."""
+        return self._irradiance_toggle
+
+    @irradiance_toggle.setter
+    def irradiance_toggle(self, value: bool | None) -> None:
+        self._irradiance_toggle = value
+
+    @property
+    def cloud_toggle(self) -> bool | None:
+        """Toggle cloud coverage check."""
+        return self._cloud_toggle
+
+    @cloud_toggle.setter
+    def cloud_toggle(self, value: bool | None) -> None:
+        self._cloud_toggle = value
+
+    @property
+    def weather_toggle(self) -> bool | None:
+        """Toggle weather check."""
+        return self._weather_toggle
+
+    @weather_toggle.setter
+    def weather_toggle(self, value: bool | None) -> None:
+        self._weather_toggle = value
+
+    # Automation settings accessors
+    def get_option(self, key: str, default=None):
+        """Get a shared option value."""
+        return self.config_entry.options.get(key, default)
+
+    @property
+    def delta_position(self) -> int:
+        """Get minimum position change threshold."""
+        return self.config_entry.options.get(CONF_DELTA_POSITION, 1)
+
+    @property
+    def delta_time(self) -> int:
+        """Get minimum time between updates."""
+        return self.config_entry.options.get(CONF_DELTA_TIME, 2)
+
+    @property
+    def start_time(self) -> str | None:
+        """Get automation start time."""
+        return self.config_entry.options.get(CONF_START_TIME)
+
+    @property
+    def start_time_entity(self) -> str | None:
+        """Get automation start time entity."""
+        return self.config_entry.options.get(CONF_START_ENTITY)
+
+    @property
+    def end_time(self) -> str | None:
+        """Get automation end time."""
+        return self.config_entry.options.get(CONF_END_TIME)
+
+    @property
+    def end_time_entity(self) -> str | None:
+        """Get automation end time entity."""
+        return self.config_entry.options.get(CONF_END_ENTITY)
+
+    @property
+    def manual_threshold(self) -> int | None:
+        """Get manual override threshold."""
+        return self.config_entry.options.get(CONF_MANUAL_THRESHOLD)
+
+    @property
+    def ignore_intermediate_states(self) -> bool:
+        """Get whether to ignore intermediate states."""
+        return self.config_entry.options.get(CONF_MANUAL_IGNORE_INTERMEDIATE, False)
+
+    @property
+    def climate_mode_enabled(self) -> bool:
+        """Check if climate mode is enabled in config."""
+        return self._climate_mode
+
+    @property
+    def track_end_time(self) -> bool:
+        """Check if end time tracking is enabled."""
+        return self._track_end_time or False
+
+    # Graceful degradation
+    def update_last_known(self, key: str, value: bool | None) -> None:
+        """Update a last known sensor value."""
+        if self._last_known.get(key) != value:
+            self._last_known[key] = value
+            self.hass.async_create_task(self._async_save_last_known())
+
+    def update_sensor_available(self, key: str, available: bool) -> None:
+        """Update sensor availability status."""
+        self._sensor_available[key] = available
