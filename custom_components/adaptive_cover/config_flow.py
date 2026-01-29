@@ -891,6 +891,10 @@ class OptionsFlowHandler(OptionsFlow):
         self._config_entry = config_entry
         self.current_config: dict = dict(config_entry.data)
         self.options = dict(config_entry.options)
+        # Ensure defaults for optional keys that may not exist in older entries
+        self.options.setdefault(CONF_CLIMATE_MODE, False)
+        self.options.setdefault(CONF_ENABLE_BLIND_SPOT, False)
+        self.options.setdefault(CONF_INTERP, False)
         self.sensor_type: SensorType = (
             self.current_config.get(CONF_SENSOR_TYPE) or SensorType.BLIND
         )
