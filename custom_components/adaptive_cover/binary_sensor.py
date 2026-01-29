@@ -120,13 +120,19 @@ class AdaptiveCoverBinarySensor(CoordinatorEntity[CoordinatorType], BinarySensor
         self._key = key
         self._attr_translation_key = key
         self._name = config_entry.data["name"]
-        self._attr_name = binary_name
         self._attr_unique_id = f"{unique_id}_{binary_name}"
         self._device_id = unique_id
         self._state = state
         self._attr_device_class = device_class
         self._is_room = is_room
         self._room_id = room_id
+
+        # When cover belongs to a room, include cover name in entity name
+        if room_id and not is_room:
+            self._attr_has_entity_name = False
+            self._attr_name = f"{self._name} {binary_name}"
+        else:
+            self._attr_name = binary_name
 
         # Set device info based on entry type
         if is_room:

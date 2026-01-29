@@ -55,11 +55,17 @@ class ForceUpdateButton(CoordinatorEntity[AdaptiveDataUpdateCoordinator], Button
         """Initialize the button."""
         super().__init__(coordinator=coordinator)
         self._name = config_entry.data["name"]
-        self._attr_name = "Force Update"
         self._attr_unique_id = f"{unique_id}_force_update"
         self._attr_icon = "mdi:refresh"
         self._device_id = unique_id
         self._room_id = room_id
+
+        # When cover belongs to a room, include cover name in entity name
+        if room_id:
+            self._attr_has_entity_name = False
+            self._attr_name = f"{self._name} Force Update"
+        else:
+            self._attr_name = "Force Update"
 
         info = DeviceInfo(
             identifiers={(DOMAIN, self._device_id)},

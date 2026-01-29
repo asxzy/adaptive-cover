@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import (
     CONF_ENTITIES,
     CONF_ENTRY_TYPE,
+    CONF_ROOM_ID,
     CONTROL_MODE_AUTO,
     CONTROL_MODE_DISABLED,
     CONTROL_MODE_FORCE,
@@ -34,6 +35,7 @@ async def async_setup_entry(
     """Set up the select platform."""
     coordinator: CoordinatorType = hass.data[DOMAIN][config_entry.entry_id]
     entry_type = config_entry.data.get(CONF_ENTRY_TYPE)
+    room_id = config_entry.data.get(CONF_ROOM_ID)
 
     entities = []
 
@@ -52,6 +54,7 @@ async def async_setup_entry(
                 config_entry,
                 config_entry.entry_id,
                 coordinator,
+                room_id=room_id,
             )
             entities.append(control_mode_select)
 
@@ -73,14 +76,22 @@ class ControlModeSelect(
         config_entry: ConfigEntry,
         unique_id: str,
         coordinator: CoordinatorType,
+        room_id: str | None = None,
     ) -> None:
         """Initialize the select entity."""
         super().__init__(coordinator=coordinator)
         self._name = config_entry.data["name"]
-        self._attr_name = "Control Mode"
         self._attr_unique_id = f"{unique_id}_control_mode"
         self._device_id = unique_id
         self._entry_type = config_entry.data.get(CONF_ENTRY_TYPE)
+        self._room_id = room_id
+
+        # When cover belongs to a room, include cover name in entity name
+        if room_id and self._entry_type != EntryType.ROOM:
+            self._attr_has_entity_name = False
+            self._attr_name = f"{self._name} Control Mode"
+        else:
+            self._attr_name = "Control Mode"
 
         # Set device info based on entry type
         if self._entry_type == EntryType.ROOM:
@@ -89,10 +100,13 @@ class ControlModeSelect(
                 name=f"Room: {self._name}",
             )
         else:
-            self._attr_device_info = DeviceInfo(
+            info = DeviceInfo(
                 identifiers={(DOMAIN, self._device_id)},
                 name=self._name,
             )
+            if room_id:
+                info["via_device"] = (DOMAIN, f"room_{room_id}")
+            self._attr_device_info = info
         self._attr_current_option = CONTROL_MODE_AUTO
 
         self.coordinator.logger.debug("Setup control mode select")

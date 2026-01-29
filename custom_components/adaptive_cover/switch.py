@@ -20,6 +20,7 @@ from .const import (
     CONF_IRRADIANCE_ENTITY,
     CONF_LUX_ENTITY,
     CONF_OUTSIDETEMP_ENTITY,
+    CONF_ROOM_ID,
     CONF_WEATHER_ENTITY,
     CONTROL_MODE_AUTO,
     DOMAIN,
@@ -39,6 +40,7 @@ async def async_setup_entry(
     """Set up the switch platform."""
     coordinator: CoordinatorType = hass.data[DOMAIN][config_entry.entry_id]
     entry_type = config_entry.data.get(CONF_ENTRY_TYPE)
+    room_id = config_entry.data.get(CONF_ROOM_ID)
 
     # Determine if this is a room entry
     is_room = entry_type == EntryType.ROOM
@@ -52,6 +54,7 @@ async def async_setup_entry(
         "temp_toggle",
         coordinator,
         is_room=is_room,
+        room_id=room_id,
     )
     lux_switch = AdaptiveCoverSwitch(
         config_entry,
@@ -61,6 +64,7 @@ async def async_setup_entry(
         "lux_toggle",
         coordinator,
         is_room=is_room,
+        room_id=room_id,
     )
     irradiance_switch = AdaptiveCoverSwitch(
         config_entry,
@@ -70,6 +74,7 @@ async def async_setup_entry(
         "irradiance_toggle",
         coordinator,
         is_room=is_room,
+        room_id=room_id,
     )
     cloud_switch = AdaptiveCoverSwitch(
         config_entry,
@@ -79,6 +84,7 @@ async def async_setup_entry(
         "cloud_toggle",
         coordinator,
         is_room=is_room,
+        room_id=room_id,
     )
     weather_switch = AdaptiveCoverSwitch(
         config_entry,
@@ -88,6 +94,7 @@ async def async_setup_entry(
         "weather_toggle",
         coordinator,
         is_room=is_room,
+        room_id=room_id,
     )
 
     # Room entries always have climate mode enabled
@@ -136,6 +143,7 @@ class AdaptiveCoverSwitch(
         coordinator: CoordinatorType,
         device_class: SwitchDeviceClass | None = None,
         is_room: bool = False,
+        room_id: str | None = None,
     ) -> None:
         """Initialize the switch."""
         super().__init__(coordinator=coordinator)
@@ -143,12 +151,19 @@ class AdaptiveCoverSwitch(
         self._state: bool | None = None
         self._key = key
         self._attr_translation_key = key
-        self._attr_name = switch_name
         self._attr_device_class = device_class
         self._initial_state = initial_state
         self._attr_unique_id = f"{unique_id}_{switch_name}"
         self._device_id = unique_id
         self._is_room = is_room
+        self._room_id = room_id
+
+        # When cover belongs to a room, include cover name in entity name
+        if room_id and not is_room:
+            self._attr_has_entity_name = False
+            self._attr_name = f"{self._name} {switch_name}"
+        else:
+            self._attr_name = switch_name
 
         # Set device info based on entry type
         if is_room:
@@ -157,10 +172,13 @@ class AdaptiveCoverSwitch(
                 name=f"Room: {self._name}",
             )
         else:
-            self._attr_device_info = DeviceInfo(
+            info = DeviceInfo(
                 identifiers={(DOMAIN, self._device_id)},
                 name=self._name,
             )
+            if room_id:
+                info["via_device"] = (DOMAIN, f"room_{room_id}")
+            self._attr_device_info = info
 
         self.coordinator.logger.debug("Setup switch")
 

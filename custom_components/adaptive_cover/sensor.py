@@ -127,13 +127,19 @@ class AdaptiveCoverSensorEntity(
         super().__init__(coordinator=coordinator)
         self.coordinator = coordinator
         self.data = self.coordinator.data
-        self._attr_name = "Cover Position"
-        self._attr_unique_id = f"{unique_id}_{self._attr_name}"
+        self._attr_unique_id = f"{unique_id}_Cover Position"
         self.hass = hass
         self.config_entry = config_entry
         self._name = name
         self._device_id = unique_id
         self._room_id = room_id
+
+        # When cover belongs to a room, include cover name in entity name
+        if room_id:
+            self._attr_has_entity_name = False
+            self._attr_name = f"{name} Cover Position"
+        else:
+            self._attr_name = "Cover Position"
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -199,12 +205,18 @@ class AdaptiveCoverTimeSensorEntity(
         self.coordinator = coordinator
         self.data = self.coordinator.data
         self._attr_unique_id = f"{unique_id}_{sensor_name}"
-        self._attr_name = sensor_name
         self._device_id = unique_id
         self.hass = hass
         self.config_entry = config_entry
         self._name = name
         self._room_id = room_id
+
+        # When cover belongs to a room, include cover name in entity name
+        if room_id:
+            self._attr_has_entity_name = False
+            self._attr_name = f"{name} {sensor_name}"
+        else:
+            self._attr_name = sensor_name
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -252,14 +264,20 @@ class AdaptiveCoverControlSensorEntity(
         super().__init__(coordinator=coordinator)
         self.coordinator = coordinator
         self.data = self.coordinator.data
-        self._attr_name = "Control Method"
-        self._attr_unique_id = f"{unique_id}_{self._attr_name}"
+        self._attr_unique_id = f"{unique_id}_Control Method"
         self._device_id = unique_id
         self.id = unique_id
         self.hass = hass
         self.config_entry = config_entry
         self._name = name
         self._room_id = room_id
+
+        # When cover belongs to a room, include cover name in entity name
+        if room_id:
+            self._attr_has_entity_name = False
+            self._attr_name = f"{name} Control Method"
+        else:
+            self._attr_name = "Control Method"
 
     @callback
     def _handle_coordinator_update(self) -> None:
