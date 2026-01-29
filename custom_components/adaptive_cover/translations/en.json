@@ -348,7 +348,9 @@
           "interp": "Range Adjustment",
           "room_automation": "Modify Room Automation",
           "room_climate": "Edit Room Climate Settings",
-          "room_weather": "Edit Room Weather Conditions"
+          "room_weather": "Edit Room Weather Conditions",
+          "move_to_room": "Move to Room",
+          "remove_from_room": "Remove from Room"
         }
       },
       "automation": {
@@ -639,7 +641,21 @@
           "start_time": "Starting time for each day; before this time, the cover will remain stationary",
           "start_entity": "Entity representing starting time state"
         }
+      },
+      "move_to_room": {
+        "title": "Move to Room",
+        "description": "Select the room to move this cover to. The cover will inherit the room's climate and automation settings.",
+        "data": {
+          "room_id": "Room"
+        }
+      },
+      "remove_from_room": {
+        "title": "Remove from Room",
+        "description": "Remove this cover from its room. The cover will become a standalone cover with default automation settings."
       }
+    },
+    "error": {
+      "room_not_found": "The selected room no longer exists."
     }
   },
   "selector": {

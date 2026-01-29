@@ -901,6 +901,14 @@ class OptionsFlowHandler(OptionsFlow):
         self.entry_type = self.current_config.get(CONF_ENTRY_TYPE, EntryType.COVER)
         self.room_id = self.current_config.get(CONF_ROOM_ID)
 
+    def _get_existing_rooms(self) -> list[tuple[str, str]]:
+        """Get list of existing room entries as (entry_id, name) tuples."""
+        rooms = []
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.data.get(CONF_ENTRY_TYPE) == EntryType.ROOM:
+                rooms.append((entry.entry_id, entry.data.get("name", "Unknown Room")))
+        return rooms
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -922,6 +930,12 @@ class OptionsFlowHandler(OptionsFlow):
                 options.append("climate")
             if self.options.get(CONF_WEATHER_ENTITY):
                 options.append("weather")
+            # Show move to room option if rooms exist
+            if self._get_existing_rooms():
+                options.append("move_to_room")
+        else:
+            # Show remove from room option for covers in a room
+            options.append("remove_from_room")
 
         if self.options.get(CONF_ENABLE_BLIND_SPOT):
             options.append("blind_spot")
@@ -943,6 +957,117 @@ class OptionsFlowHandler(OptionsFlow):
             data_schema=self.add_suggested_values_to_schema(
                 AUTOMATION_CONFIG, user_input or self.options
             ),
+        )
+
+    async def async_step_move_to_room(self, user_input: dict[str, Any] | None = None):
+        """Move this cover to a room."""
+        rooms = self._get_existing_rooms()
+
+        if not rooms:
+            # No rooms exist, return to init
+            return await self.async_step_init()
+
+        room_options = [
+            selector.SelectOptionDict(value=room_id, label=name)
+            for room_id, name in rooms
+        ]
+
+        select_room_schema = vol.Schema(
+            {
+                vol.Required("room_id"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=room_options)
+                ),
+            }
+        )
+
+        if user_input:
+            room_id = user_input["room_id"]
+            # Verify room still exists
+            room_exists = any(
+                entry.entry_id == room_id
+                for entry in self.hass.config_entries.async_entries(DOMAIN)
+                if entry.data.get(CONF_ENTRY_TYPE) == EntryType.ROOM
+            )
+            if not room_exists:
+                return self.async_show_form(
+                    step_id="move_to_room",
+                    data_schema=select_room_schema,
+                    errors={"base": "room_not_found"},
+                )
+
+            # Update entry data to add room_id
+            new_data = dict(self._config_entry.data)
+            new_data[CONF_ROOM_ID] = room_id
+            self.hass.config_entries.async_update_entry(
+                self._config_entry, data=new_data
+            )
+
+            # Remove standalone-specific options (they come from room now)
+            keys_to_remove = [
+                CONF_TEMP_ENTITY,
+                CONF_PRESENCE_ENTITY,
+                CONF_WEATHER_ENTITY,
+                CONF_TEMP_LOW,
+                CONF_TEMP_HIGH,
+                CONF_OUTSIDETEMP_ENTITY,
+                CONF_CLIMATE_MODE,
+                CONF_WEATHER_STATE,
+                CONF_DELTA_POSITION,
+                CONF_DELTA_TIME,
+                CONF_START_TIME,
+                CONF_START_ENTITY,
+                CONF_END_TIME,
+                CONF_END_ENTITY,
+                CONF_RETURN_SUNSET,
+                CONF_MANUAL_THRESHOLD,
+                CONF_RESET_AT_MIDNIGHT,
+                CONF_MANUAL_IGNORE_INTERMEDIATE,
+                CONF_TRANSPARENT_BLIND,
+                CONF_LUX_ENTITY,
+                CONF_LUX_THRESHOLD,
+                CONF_IRRADIANCE_ENTITY,
+                CONF_IRRADIANCE_THRESHOLD,
+                CONF_OUTSIDE_THRESHOLD,
+                CONF_CLOUD_ENTITY,
+                CONF_CLOUD_THRESHOLD,
+            ]
+            for key in keys_to_remove:
+                self.options.pop(key, None)
+
+            return self.async_create_entry(title="", data=self.options)
+
+        return self.async_show_form(
+            step_id="move_to_room", data_schema=select_room_schema
+        )
+
+    async def async_step_remove_from_room(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Remove this cover from its room."""
+        if user_input is not None:
+            # Update entry data to remove room_id
+            new_data = dict(self._config_entry.data)
+            new_data.pop(CONF_ROOM_ID, None)
+            self.hass.config_entries.async_update_entry(
+                self._config_entry, data=new_data
+            )
+
+            # Add default standalone options (automation/climate)
+            self.options.setdefault(CONF_DELTA_POSITION, 1)
+            self.options.setdefault(CONF_DELTA_TIME, 2)
+            self.options.setdefault(CONF_START_TIME, "00:00:00")
+            self.options.setdefault(CONF_END_TIME, "00:00:00")
+            self.options.setdefault(CONF_RETURN_SUNSET, False)
+            self.options.setdefault(CONF_RESET_AT_MIDNIGHT, True)
+            self.options.setdefault(CONF_MANUAL_IGNORE_INTERMEDIATE, False)
+            self.options.setdefault(CONF_CLIMATE_MODE, False)
+
+            return self.async_create_entry(title="", data=self.options)
+
+        # Show confirmation form
+        confirm_schema = vol.Schema({})
+        return self.async_show_form(
+            step_id="remove_from_room", data_schema=confirm_schema
         )
 
     async def async_step_room_climate(self, user_input: dict[str, Any] | None = None):

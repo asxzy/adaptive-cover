@@ -214,19 +214,29 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     entry_type = entry.data.get(CONF_ENTRY_TYPE)
 
-    # Determine which platforms to unload
+    # Get old room_id from runtime_data if available (set by _async_update_listener)
+    # This handles the case where cover was moved between rooms or removed from a room
+    old_room_id = None
+    if hasattr(entry, "runtime_data") and entry.runtime_data:
+        old_room_id = entry.runtime_data.get("_old_room_id")
+
+    # Use old room_id for determining platforms and unregistering
+    room_id_for_unload = (
+        old_room_id if old_room_id is not None else entry.data.get(CONF_ROOM_ID)
+    )
+
+    # Determine which platforms to unload based on the OLD state
     if entry_type == EntryType.ROOM:
         platforms = ROOM_PLATFORMS
-    elif entry.data.get(CONF_ROOM_ID):
+    elif room_id_for_unload:
         platforms = COVER_IN_ROOM_PLATFORMS
     else:
         platforms = STANDALONE_COVER_PLATFORMS
 
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, platforms):
-        # Unregister cover from room if part of a room
-        room_id = entry.data.get(CONF_ROOM_ID)
-        if room_id:
-            room_coordinator = hass.data[DOMAIN].get(f"room_{room_id}")
+        # Unregister cover from room if it was part of a room
+        if room_id_for_unload:
+            room_coordinator = hass.data[DOMAIN].get(f"room_{room_id_for_unload}")
             coordinator = hass.data[DOMAIN].get(entry.entry_id)
             if room_coordinator and coordinator:
                 room_coordinator.unregister_cover(coordinator)
@@ -242,4 +252,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle options update."""
+    # Capture old room_id before reload so unload can unregister from correct room
+    coordinator = hass.data[DOMAIN].get(entry.entry_id)
+    old_room_id = None
+    if (
+        coordinator
+        and hasattr(coordinator, "room_coordinator")
+        and coordinator.room_coordinator
+    ):
+        old_room_id = coordinator.room_coordinator.config_entry.entry_id
+
+    # Store old room_id in runtime_data for async_unload_entry to use
+    entry.runtime_data = {"_old_room_id": old_room_id}
+
     await hass.config_entries.async_reload(entry.entry_id)
