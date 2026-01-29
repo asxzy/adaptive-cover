@@ -92,15 +92,19 @@ async def async_setup_entry(
             coordinator,
             room_id=room_id,
         )
-        control = AdaptiveCoverControlSensorEntity(
-            config_entry.entry_id,
-            hass,
-            config_entry,
-            name,
-            coordinator,
-            room_id=room_id,
-        )
-        entities.extend([sensor, start, end, control])
+        entities.extend([sensor, start, end])
+
+        # Comfort Status only for standalone covers (room handles this)
+        if not room_id:
+            control = AdaptiveCoverControlSensorEntity(
+                config_entry.entry_id,
+                hass,
+                config_entry,
+                name,
+                coordinator,
+                room_id=room_id,
+            )
+            entities.append(control)
 
         # Add cloud coverage sensor only for standalone covers
         if not room_id:

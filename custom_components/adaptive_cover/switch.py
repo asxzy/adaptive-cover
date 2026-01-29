@@ -46,6 +46,11 @@ async def async_setup_entry(
     # Determine if this is a room entry
     is_room = entry_type == EntryType.ROOM
 
+    # Skip switches for covers inside a room (room handles switches)
+    if room_id and not is_room:
+        async_add_entities([])
+        return
+
     # Sensor toggle switches (only functional in AUTO mode)
     temp_switch = AdaptiveCoverSwitch(
         config_entry,

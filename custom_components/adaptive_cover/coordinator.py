@@ -867,8 +867,10 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self.logger.debug("Cover is already at position %s", state)
         return False
 
-    def check_position_delta(self, entity, state: int, options):
+    def check_position_delta(self, entity, state: int | None, options):
         """Check cover positions to reduce calls."""
+        if state is None:
+            return False
         position = self._get_current_position(entity)
         if position is not None:
             condition = abs(position - state) >= self.min_change

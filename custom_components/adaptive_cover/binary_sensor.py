@@ -34,7 +34,7 @@ async def async_setup_entry(
 
     entities = []
 
-    # Room entry - presence and weather sensors
+    # Room entry - only presence sensor (weather/sun is per-cover)
     if entry_type == EntryType.ROOM:
         is_presence = AdaptiveCoverBinarySensor(
             config_entry,
@@ -46,17 +46,7 @@ async def async_setup_entry(
             coordinator,
             is_room=True,
         )
-        has_direct_sun = AdaptiveCoverBinarySensor(
-            config_entry,
-            config_entry.entry_id,
-            "Weather Has Direct Sun",
-            False,
-            "has_direct_sun",
-            BinarySensorDeviceClass.LIGHT,
-            coordinator,
-            is_room=True,
-        )
-        entities.extend([is_presence, has_direct_sun])
+        entities.append(is_presence)
 
     # Cover entry (standalone or part of room) - sun motion sensor
     else:
