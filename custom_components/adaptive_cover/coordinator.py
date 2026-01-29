@@ -965,9 +965,9 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         """Update climate mode data and control method."""
         self.climate_state = round(ClimateCoverState(cover_data, climate).get_state())
         climate_data = ClimateCoverState(cover_data, climate).climate_data
-        if climate_data.is_summer and self.switch_mode:
+        if climate_data.is_summer and self.is_climate_mode:
             self.control_method = "summer"
-        if climate_data.is_winter and self.switch_mode:
+        if climate_data.is_winter and self.is_climate_mode:
             self.control_method = "winter"
         self.logger.debug(
             "Climate mode control method was set to %s", self.control_method
