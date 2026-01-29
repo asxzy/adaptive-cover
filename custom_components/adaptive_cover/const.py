@@ -89,6 +89,11 @@ STRATEGY_MODES = [
     STRATEGY_MODE_CLIMATE,
 ]
 
+# Comfort status constants (temperature-based status)
+COMFORT_STATUS_TOO_HOT = "too_hot"
+COMFORT_STATUS_TOO_COLD = "too_cold"
+COMFORT_STATUS_COMFORTABLE = "comfortable"
+
 
 class SensorType:
     """Possible modes for a number selector."""

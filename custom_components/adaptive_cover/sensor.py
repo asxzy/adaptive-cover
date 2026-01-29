@@ -245,11 +245,11 @@ class AdaptiveCoverTimeSensorEntity(
 class AdaptiveCoverControlSensorEntity(
     CoordinatorEntity[AdaptiveDataUpdateCoordinator], SensorEntity
 ):
-    """Adaptive Cover Control method Sensor."""
+    """Adaptive Cover Comfort Status Sensor."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    _attr_translation_key = "control"
+    _attr_translation_key = "comfort_status"
 
     def __init__(
         self,
@@ -264,7 +264,7 @@ class AdaptiveCoverControlSensorEntity(
         super().__init__(coordinator=coordinator)
         self.coordinator = coordinator
         self.data = self.coordinator.data
-        self._attr_unique_id = f"{unique_id}_Control Method"
+        self._attr_unique_id = f"{unique_id}_Comfort Status"
         self._device_id = unique_id
         self.id = unique_id
         self.hass = hass
@@ -275,9 +275,9 @@ class AdaptiveCoverControlSensorEntity(
         # When cover belongs to a room, include cover name in entity name
         if room_id:
             self._attr_has_entity_name = False
-            self._attr_name = f"{name} Control Method"
+            self._attr_name = f"{name} Comfort Status"
         else:
-            self._attr_name = "Control Method"
+            self._attr_name = "Comfort Status"
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -288,7 +288,7 @@ class AdaptiveCoverControlSensorEntity(
     @property
     def native_value(self) -> str | None:
         """Handle when entity is added."""
-        return self.data.states["control"]
+        return self.data.states["comfort_status"]
 
     @property
     def device_info(self) -> DeviceInfo:

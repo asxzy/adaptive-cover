@@ -463,5 +463,16 @@
         "mode2": "twee-richtings (0% = dicht / 50% = open / 100% = dicht)"
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "comfort_status": {
+        "state": {
+          "too_hot": "Te Warm",
+          "too_cold": "Te Koud",
+          "comfortable": "Comfortabel"
+        }
+      }
+    }
   }
 }

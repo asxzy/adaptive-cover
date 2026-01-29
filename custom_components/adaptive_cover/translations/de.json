@@ -477,5 +477,16 @@
         "mode2": "Bidirektional (0% = geschlossen / 50% = offen / 100% = geschlossen)"
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "comfort_status": {
+        "state": {
+          "too_hot": "Zu Warm",
+          "too_cold": "Zu Kalt",
+          "comfortable": "Angenehm"
+        }
+      }
+    }
   }
 }

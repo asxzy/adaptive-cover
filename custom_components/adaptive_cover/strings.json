@@ -623,6 +623,15 @@
         }
       }
     },
+    "sensor": {
+      "comfort_status": {
+        "state": {
+          "too_hot": "Too Hot",
+          "too_cold": "Too Cold",
+          "comfortable": "Comfortable"
+        }
+      }
+    },
     "button": {
       "force_update": {
         "name": "Force Update"

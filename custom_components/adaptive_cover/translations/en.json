@@ -672,5 +672,31 @@
         "mode2": "bi-directional (0% = closed / 50% = open / 100% = closed)"
       }
     }
+  },
+  "entity": {
+    "select": {
+      "control_mode": {
+        "name": "Control Mode",
+        "state": {
+          "disabled": "Disabled",
+          "force": "Force",
+          "auto": "Auto"
+        }
+      }
+    },
+    "sensor": {
+      "comfort_status": {
+        "state": {
+          "too_hot": "Too Hot",
+          "too_cold": "Too Cold",
+          "comfortable": "Comfortable"
+        }
+      }
+    },
+    "button": {
+      "force_update": {
+        "name": "Force Update"
+      }
+    }
   }
 }

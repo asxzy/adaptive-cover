@@ -107,6 +107,9 @@ from .const import (
     CONF_TRANSPARENT_BLIND,
     CONF_WEATHER_ENTITY,
     CONF_WEATHER_STATE,
+    COMFORT_STATUS_COMFORTABLE,
+    COMFORT_STATUS_TOO_COLD,
+    COMFORT_STATUS_TOO_HOT,
     CONTROL_MODE_AUTO,
     CONTROL_MODE_DISABLED,
     CONTROL_MODE_FORCE,
@@ -187,7 +190,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self.first_refresh = False
         self.timed_refresh = False
         self.climate_state = None
-        self.control_method = "intermediate"
+        self.comfort_status = COMFORT_STATUS_COMFORTABLE
         self.state_change_data: StateChangedData | None = None
         self.manager = AdaptiveCoverManager(self.logger, self)
         self.wait_for_target = {}
@@ -539,7 +542,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         if self._climate_mode:
             self.climate_mode_data(cover_data, climate)
         else:
-            self.logger.debug("Control method is %s", self.control_method)
+            self.logger.debug("Comfort status is %s", self.comfort_status)
 
         # calculate the state of the cover (pass weather check for basic mode)
         self.normal_cover_state = NormalCoverState(cover_data)
@@ -605,7 +608,7 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
                 "state": state,
                 "start": start,
                 "end": end,
-                "control": self.control_method,
+                "comfort_status": self.comfort_status,
                 "sun_motion": normal_cover.valid,
                 "is_presence": self._is_presence,
                 "has_direct_sun": self._has_direct_sun,
@@ -964,15 +967,15 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         ]
 
     def climate_mode_data(self, cover_data, climate):
-        """Update climate mode data and control method."""
+        """Update climate mode data and comfort status."""
         self.climate_state = round(ClimateCoverState(cover_data, climate).get_state())
         climate_data = ClimateCoverState(cover_data, climate).climate_data
         if climate_data.is_summer and self.is_climate_mode:
-            self.control_method = "summer"
+            self.comfort_status = COMFORT_STATUS_TOO_HOT
         if climate_data.is_winter and self.is_climate_mode:
-            self.control_method = "winter"
+            self.comfort_status = COMFORT_STATUS_TOO_COLD
         self.logger.debug(
-            "Climate mode control method was set to %s", self.control_method
+            "Climate mode comfort status was set to %s", self.comfort_status
         )
 
     def vertical_data(self, options):

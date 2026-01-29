@@ -477,5 +477,16 @@
         "mode2": "obojsmerné (0 % = zatvorené / 50 % = otvorené / 100 % = zatvorené)"
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "comfort_status": {
+        "state": {
+          "too_hot": "Príliš Teplo",
+          "too_cold": "Príliš Chladno",
+          "comfortable": "Príjemne"
+        }
+      }
+    }
   }
 }
