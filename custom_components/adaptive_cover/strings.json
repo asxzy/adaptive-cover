@@ -3,9 +3,103 @@
   "config": {
     "step": {
       "user": {
+        "menu_options": {
+          "create_room": "Create a Room",
+          "standalone_cover": "Create a Standalone Cover",
+          "add_cover_to_room": "Add Cover to Existing Room"
+        },
         "data": {
           "name": "Name",
           "blueprint": "Add blueprint to HomeAssistant",
+          "mode": "Type of blind"
+        }
+      },
+      "create_room": {
+        "title": "Create Room",
+        "description": "Create a room to group covers with shared climate and automation settings.",
+        "data": {
+          "name": "Room Name"
+        }
+      },
+      "room_climate": {
+        "title": "Room Climate Settings",
+        "description": "Configure climate sensors for this room. These settings will be shared by all covers in the room.",
+        "data": {
+          "temp_entity": "Inside temperature entity",
+          "presence_entity": "Presence entity (optional)",
+          "weather_entity": "Weather entity (optional)",
+          "outside_temp": "Outside temperature sensor (optional)",
+          "temp_low": "Low temperature threshold",
+          "temp_high": "High temperature threshold",
+          "transparent_blind": "Transparent blind",
+          "lux_entity": "Lux sensor (optional)",
+          "lux_threshold": "Lux threshold",
+          "irradiance_entity": "Irradiance sensor (optional)",
+          "irradiance_threshold": "Irradiance threshold",
+          "outside_threshold": "Minimum outside temperature for summer mode",
+          "cloud_entity": "Cloud coverage sensor (optional)",
+          "cloud_threshold": "Cloud coverage threshold"
+        },
+        "data_description": {
+          "presence_entity": "Entity representing room or home presence status",
+          "weather_entity": "Monitors weather conditions, and outside temperature",
+          "outside_temp": "Overrides outside temperature from weather entity if both are set",
+          "temp_low": "Minimum comfortable temperature",
+          "temp_high": "Maximum comfortable temperature",
+          "transparent_blind": "The blind is transparent and should always close fully when summer mode is active",
+          "lux_entity": "Use lux sensor to determine if cover should reduce glare in presence mode",
+          "lux_threshold": "Threshold for lux sensor, above this value glare should be reduced",
+          "irradiance_entity": "Use irradiance sensor to determine if cover should reduce glare in presence mode",
+          "irradiance_threshold": "Threshold for irradiance sensor, above this value glare should be reduced",
+          "cloud_entity": "Sensor providing cloud coverage percentage (0-100%). When coverage exceeds threshold, the cover uses default position",
+          "cloud_threshold": "Cloud coverage percentage above which direct sunlight is considered blocked"
+        }
+      },
+      "room_weather": {
+        "title": "Room Weather Conditions",
+        "description": "Select weather conditions that indicate the possibility of direct sunlight.",
+        "data": {
+          "weather_state": "Weather Conditions"
+        },
+        "data_description": {
+          "weather_state": "Choose weather conditions that indicate the possibility of direct sunlight."
+        }
+      },
+      "room_automation": {
+        "title": "Room Automation Settings",
+        "description": "Configure automation settings for this room. These settings will be shared by all covers in the room.",
+        "data": {
+          "delta_position": "Minimum position adjustment",
+          "delta_time": "Minimum interval between position changes",
+          "start_time": "Starting time",
+          "start_entity": "Entity indicating starting time",
+          "manual_threshold": "Manual override threshold",
+          "manual_ignore_intermediate": "Ignore intermediate positions during manual override",
+          "reset_at_midnight": "Reset manual override at midnight",
+          "end_time": "End time",
+          "end_entity": "Entity indicating ending time",
+          "return_sunset": "Return to sunset position at end time"
+        },
+        "data_description": {
+          "delta_position": "Minimum change in position required before adjusting the cover's position",
+          "delta_time": "Minimum time interval between position changes; minimum is 2 minutes",
+          "start_time": "Starting time for each day; before this time, the cover will remain stationary",
+          "start_entity": "Entity representing starting time state, overriding the fixed start time set above",
+          "end_time": "Ending time for each day; after this time, the cover will remain stationary",
+          "end_entity": "Entity representing ending time state, overriding the fixed end time set above"
+        }
+      },
+      "add_cover_to_room": {
+        "title": "Add Cover to Room",
+        "description": "Select the room to add this cover to.",
+        "data": {
+          "room_id": "Room"
+        }
+      },
+      "cover_type": {
+        "title": "Cover Type",
+        "description": "Select the type of cover to configure.",
+        "data": {
           "mode": "Type of blind"
         }
       },
@@ -228,7 +322,68 @@
           "climate": "Edit Climate Configuration",
           "weather": "Edit Weather Configuration",
           "blind_spot": "Setup Blindspot",
-          "interp": "Range Adjustment"
+          "interp": "Range Adjustment",
+          "room_automation": "Modify Room Automation",
+          "room_climate": "Edit Room Climate Settings",
+          "room_weather": "Edit Room Weather Conditions"
+        }
+      },
+      "room_climate": {
+        "title": "Room Climate Settings",
+        "description": "Configure climate sensors for this room.",
+        "data": {
+          "temp_entity": "Inside temperature entity",
+          "presence_entity": "Presence entity (optional)",
+          "weather_entity": "Weather entity (optional)",
+          "outside_temp": "Outside temperature sensor (optional)",
+          "temp_low": "Low temperature threshold",
+          "temp_high": "High temperature threshold",
+          "transparent_blind": "Transparent blind",
+          "lux_entity": "Lux sensor (optional)",
+          "lux_threshold": "Lux threshold",
+          "irradiance_entity": "Irradiance sensor (optional)",
+          "irradiance_threshold": "Irradiance threshold",
+          "outside_threshold": "Minimum outside temperature for summer mode",
+          "cloud_entity": "Cloud coverage sensor (optional)",
+          "cloud_threshold": "Cloud coverage threshold"
+        },
+        "data_description": {
+          "presence_entity": "Entity representing room or home presence status",
+          "weather_entity": "Monitors weather conditions, and outside temperature",
+          "outside_temp": "Overrides outside temperature from weather entity if both are set",
+          "temp_low": "Minimum comfortable temperature",
+          "temp_high": "Maximum comfortable temperature"
+        }
+      },
+      "room_weather": {
+        "title": "Room Weather Conditions",
+        "data": {
+          "weather_state": "Weather Conditions"
+        },
+        "data_description": {
+          "weather_state": "Choose weather conditions that indicate the possibility of direct sunlight."
+        }
+      },
+      "room_automation": {
+        "title": "Room Automation Settings",
+        "description": "Configure automation settings for this room.",
+        "data": {
+          "delta_position": "Minimum position adjustment",
+          "delta_time": "Minimum interval between position changes",
+          "start_time": "Starting time",
+          "start_entity": "Entity indicating starting time",
+          "manual_threshold": "Manual override threshold",
+          "manual_ignore_intermediate": "Ignore intermediate positions during manual override",
+          "reset_at_midnight": "Reset manual override at midnight",
+          "end_time": "End time",
+          "end_entity": "Entity indicating ending time",
+          "return_sunset": "Return to sunset position at end time"
+        },
+        "data_description": {
+          "delta_position": "Minimum change in position required before adjusting the cover's position",
+          "delta_time": "Minimum time interval between position changes; minimum is 2 minutes",
+          "start_time": "Starting time for each day; before this time, the cover will remain stationary",
+          "start_entity": "Entity representing starting time state"
         }
       },
       "automation": {
