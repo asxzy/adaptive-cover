@@ -201,6 +201,12 @@ class AdaptiveCoverSwitch(
         self._attr_is_on = True
         setattr(self.coordinator, self._key, True)
 
+        # Skip refresh when restoring state during initialization
+        # to avoid moving covers before first proper refresh
+        if kwargs.get("added"):
+            self.schedule_update_ha_state()
+            return
+
         # For room coordinator, notify children
         if isinstance(self.coordinator, RoomCoordinator):
             await self.coordinator.async_refresh()
@@ -216,6 +222,12 @@ class AdaptiveCoverSwitch(
         self.coordinator.logger.debug("Turning off %s", self._key)
         self._attr_is_on = False
         setattr(self.coordinator, self._key, False)
+
+        # Skip refresh when restoring state during initialization
+        # to avoid moving covers before first proper refresh
+        if kwargs.get("added"):
+            self.schedule_update_ha_state()
+            return
 
         # For room coordinator, notify children
         if isinstance(self.coordinator, RoomCoordinator):
