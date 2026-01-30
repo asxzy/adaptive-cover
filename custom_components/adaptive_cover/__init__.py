@@ -201,6 +201,7 @@ async def _async_setup_cover_entry(hass: HomeAssistant, entry: ConfigEntry) -> b
     # Register with room coordinator if part of a room
     if room_coordinator:
         room_coordinator.register_cover(coordinator)
+        await room_coordinator.async_refresh()  # Trigger room sensors to update
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
 

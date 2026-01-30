@@ -173,7 +173,6 @@ class AdaptiveCoverSensorEntity(
         """Initialize adaptive_cover Sensor."""
         super().__init__(coordinator=coordinator)
         self.coordinator = coordinator
-        self.data = self.coordinator.data
         self._attr_unique_id = f"{unique_id}_Cover Position"
         self.hass = hass
         self.config_entry = config_entry
@@ -191,23 +190,28 @@ class AdaptiveCoverSensorEntity(
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        self.data = self.coordinator.data
         self.async_write_ha_state()
 
     @property
     def available(self) -> bool:
         """Return if entity is available.
 
-        Cover position sensor is unavailable when control mode is OFF.
+        Cover position sensor is unavailable when control mode is OFF or data not ready.
         """
-        return self.coordinator.control_mode != CONTROL_MODE_DISABLED
+        if self.coordinator.control_mode == CONTROL_MODE_DISABLED:
+            return False
+        data = self.coordinator.data
+        if data is None:
+            return False
+        return data.states.get("state") is not None
 
     @property
-    def native_value(self) -> str | None:
+    def native_value(self) -> int | None:
         """Return the cover position."""
-        if self.data is None:
+        data = self.coordinator.data
+        if data is None:
             return None
-        return self.data.states.get("state")
+        return data.states.get("state")
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -223,9 +227,10 @@ class AdaptiveCoverSensorEntity(
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:  # noqa: D102
-        if self.data is None:
+        data = self.coordinator.data
+        if data is None:
             return None
-        return self.data.attributes
+        return data.attributes
 
 
 class AdaptiveCoverTimeSensorEntity(
@@ -254,7 +259,6 @@ class AdaptiveCoverTimeSensorEntity(
         self._attr_icon = icon
         self.key = key
         self.coordinator = coordinator
-        self.data = self.coordinator.data
         self._attr_unique_id = f"{unique_id}_{sensor_name}"
         self._device_id = unique_id
         self.hass = hass
@@ -272,15 +276,15 @@ class AdaptiveCoverTimeSensorEntity(
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        self.data = self.coordinator.data
         self.async_write_ha_state()
 
     @property
     def native_value(self) -> str | None:
         """Return the time value."""
-        if self.data is None:
+        data = self.coordinator.data
+        if data is None:
             return None
-        return self.data.states.get(self.key)
+        return data.states.get(self.key)
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -366,7 +370,6 @@ class AdaptiveCoverControlSensorEntity(
         """Initialize adaptive_cover Sensor."""
         super().__init__(coordinator=coordinator)
         self.coordinator = coordinator
-        self.data = self.coordinator.data
         self._attr_unique_id = f"{unique_id}_Comfort Status"
         self._device_id = unique_id
         self.id = unique_id
@@ -385,15 +388,15 @@ class AdaptiveCoverControlSensorEntity(
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        self.data = self.coordinator.data
         self.async_write_ha_state()
 
     @property
     def native_value(self) -> str | None:
         """Return the comfort status."""
-        if self.data is None:
+        data = self.coordinator.data
+        if data is None:
             return None
-        return self.data.states.get("comfort_status")
+        return data.states.get("comfort_status")
 
     @property
     def device_info(self) -> DeviceInfo:
