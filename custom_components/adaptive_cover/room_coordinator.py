@@ -363,6 +363,14 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
         ]
         return max(times) if times else None
 
+    @property
+    def comfort_status(self) -> str | None:
+        """Get comfort status from child covers (use first cover's status)."""
+        for child in self._child_coordinators:
+            if child.comfort_status:
+                return child.comfort_status
+        return None
+
     async def async_check_entity_state_change(self, event) -> None:
         """Handle state change for tracked entities."""
         self.logger.debug("Room entity state change")

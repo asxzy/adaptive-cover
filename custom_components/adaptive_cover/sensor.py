@@ -83,6 +83,16 @@ async def async_setup_entry(
         )
         entities.extend([start, end])
 
+        # Comfort Status sensor for room (aggregates from child covers)
+        comfort_status = AdaptiveRoomComfortStatusSensorEntity(
+            config_entry.entry_id,
+            hass,
+            config_entry,
+            name,
+            coordinator,
+        )
+        entities.append(comfort_status)
+
     # Cover entry - position sensor always, time sensors only for standalone
     else:
         sensor = AdaptiveCoverSensorEntity(
@@ -194,8 +204,10 @@ class AdaptiveCoverSensorEntity(
 
     @property
     def native_value(self) -> str | None:
-        """Handle when entity is added."""
-        return self.data.states["state"]
+        """Return the cover position."""
+        if self.data is None:
+            return None
+        return self.data.states.get("state")
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -211,6 +223,8 @@ class AdaptiveCoverSensorEntity(
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:  # noqa: D102
+        if self.data is None:
+            return None
         return self.data.attributes
 
 
@@ -263,8 +277,10 @@ class AdaptiveCoverTimeSensorEntity(
 
     @property
     def native_value(self) -> str | None:
-        """Handle when entity is added."""
-        return self.data.states[self.key]
+        """Return the time value."""
+        if self.data is None:
+            return None
+        return self.data.states.get(self.key)
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -374,8 +390,10 @@ class AdaptiveCoverControlSensorEntity(
 
     @property
     def native_value(self) -> str | None:
-        """Handle when entity is added."""
-        return self.data.states["comfort_status"]
+        """Return the comfort status."""
+        if self.data is None:
+            return None
+        return self.data.states.get("comfort_status")
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -388,6 +406,53 @@ class AdaptiveCoverControlSensorEntity(
         if self._room_id:
             info["via_device"] = (DOMAIN, f"room_{self._room_id}")
         return info
+
+
+class AdaptiveRoomComfortStatusSensorEntity(
+    CoordinatorEntity[RoomCoordinator], SensorEntity
+):
+    """Adaptive Cover Room Comfort Status Sensor."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_translation_key = "comfort_status"
+
+    def __init__(
+        self,
+        unique_id: str,
+        hass,
+        config_entry,
+        name: str,
+        coordinator: RoomCoordinator,
+    ) -> None:
+        """Initialize the room comfort status sensor."""
+        super().__init__(coordinator=coordinator)
+        self.coordinator = coordinator
+        self._attr_unique_id = f"{unique_id}_Comfort Status"
+        self._device_id = unique_id
+        self.hass = hass
+        self.config_entry = config_entry
+        self._name = name
+        self._attr_name = "Comfort Status"
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the comfort status aggregated from child covers."""
+        return self.coordinator.comfort_status
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        return DeviceInfo(
+            entry_type=DeviceEntryType.SERVICE,
+            identifiers={(DOMAIN, f"room_{self._device_id}")},
+            name=f"Room: {self._name}",
+        )
 
 
 class AdaptiveCoverCloudSensorEntity(CoordinatorEntity[CoordinatorType], SensorEntity):
