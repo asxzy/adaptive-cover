@@ -6,6 +6,9 @@ DOMAIN = "adaptive_cover"
 LOGGER = logging.getLogger(__package__)
 _LOGGER = logging.getLogger(__name__)
 
+# Signal for room coordinator ready notification
+SIGNAL_ROOM_LOADED = f"{DOMAIN}_room_loaded"
+
 ATTR_POSITION = "position"
 ATTR_TILT_POSITION = "tilt_position"
 

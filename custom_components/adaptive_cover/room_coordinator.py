@@ -23,6 +23,7 @@ from .const import (
     CONF_DELTA_TIME,
     CONF_END_ENTITY,
     CONF_END_TIME,
+    CONF_ENTRY_TYPE,
     CONF_IRRADIANCE_ENTITY,
     CONF_IRRADIANCE_THRESHOLD,
     CONF_LUX_ENTITY,
@@ -34,6 +35,7 @@ from .const import (
     CONF_PRESENCE_ENTITY,
     CONF_RESET_AT_MIDNIGHT,
     CONF_RETURN_SUNSET,
+    CONF_ROOM_ID,
     CONF_START_ENTITY,
     CONF_START_TIME,
     CONF_TEMP_ENTITY,
@@ -46,6 +48,7 @@ from .const import (
     CONTROL_MODE_DISABLED,
     CONTROL_MODE_FORCE,
     DOMAIN,
+    EntryType,
     LOGGER,
 )
 
@@ -142,6 +145,8 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
             self.logger.debug(
                 "Registered cover coordinator, total: %d", len(self._child_coordinators)
             )
+            # Notify listeners that data has changed (triggers room sensor updates)
+            self.async_set_updated_data(self.data)
 
     def unregister_cover(
         self, cover_coordinator: AdaptiveDataUpdateCoordinator
@@ -159,6 +164,40 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
         await self._async_load_last_known()
         await super().async_config_entry_first_refresh()
         self.logger.debug("Room config entry first refresh")
+
+    async def async_discover_existing_covers(self) -> None:
+        """Discover and register existing covers that belong to this room.
+
+        This handles the case where the room is reloaded and needs to reconnect
+        to its child covers that are already loaded.
+        """
+        room_id = self.config_entry.entry_id
+        self.logger.debug("Discovering existing covers for room %s", room_id)
+
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            # Skip room entries
+            if entry.data.get(CONF_ENTRY_TYPE) == EntryType.ROOM:
+                continue
+
+            # Check if this cover belongs to this room
+            if entry.data.get(CONF_ROOM_ID) == room_id:
+                cover_coordinator = self.hass.data[DOMAIN].get(entry.entry_id)
+                if (
+                    cover_coordinator
+                    and cover_coordinator not in self._child_coordinators
+                ):
+                    self.logger.debug(
+                        "Discovered existing cover %s, registering",
+                        entry.data.get("name"),
+                    )
+                    # Update cover's room coordinator reference
+                    cover_coordinator.set_room_coordinator(self)
+                    self.register_cover(cover_coordinator)
+
+        if self._child_coordinators:
+            self.logger.debug(
+                "Discovered %d existing covers", len(self._child_coordinators)
+            )
 
     async def _async_load_last_known(self) -> None:
         """Load last known sensor values from storage."""

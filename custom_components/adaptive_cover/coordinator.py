@@ -239,6 +239,21 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         """Get the room coordinator if this cover is part of a room."""
         return self._room_coordinator
 
+    def set_room_coordinator(self, room_coordinator: RoomCoordinator) -> None:
+        """Set the room coordinator for late connection.
+
+        This is called when a cover loads before its room, and the room
+        later discovers it and establishes the connection.
+        """
+        if self._room_coordinator is not None:
+            self.logger.debug("Room coordinator already set, skipping")
+            return
+
+        self.logger.debug("Late connecting to room coordinator")
+        self._room_coordinator = room_coordinator
+        # Trigger refresh to use room's settings
+        self.hass.async_create_task(self.async_refresh())
+
     async def async_config_entry_first_refresh(self) -> None:
         """Config entry first refresh."""
         self.first_refresh = True
