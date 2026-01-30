@@ -332,12 +332,17 @@ class AdaptiveRoomTimeSensorEntity(CoordinatorEntity[RoomCoordinator], SensorEnt
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        _LOGGER.debug(
+            "RoomTimeSensor[%s] _handle_coordinator_update called", self.key
+        )
         self.async_write_ha_state()
 
     @property
     def native_value(self):
         """Return the aggregated time value from room coordinator."""
-        return getattr(self.coordinator, self.key, None)
+        value = getattr(self.coordinator, self.key, None)
+        _LOGGER.debug("RoomTimeSensor[%s] native_value: %s", self.key, value)
+        return value
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -441,12 +446,15 @@ class AdaptiveRoomComfortStatusSensorEntity(
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        _LOGGER.debug("RoomComfortStatusSensor _handle_coordinator_update called")
         self.async_write_ha_state()
 
     @property
     def native_value(self) -> str | None:
         """Return the comfort status aggregated from child covers."""
-        return self.coordinator.comfort_status
+        value = self.coordinator.comfort_status
+        _LOGGER.debug("RoomComfortStatusSensor native_value: %s", value)
+        return value
 
     @property
     def device_info(self) -> DeviceInfo:

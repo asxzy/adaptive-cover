@@ -346,29 +346,53 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
     @property
     def start_sun(self) -> dt.datetime | None:
         """Get earliest start sun time from all covers."""
-        times = [
-            c.data.states.get("start")
-            for c in self._child_coordinators
-            if c.data and c.data.states.get("start")
-        ]
-        return min(times) if times else None
+        self.logger.debug(
+            "start_sun: %d child coordinators", len(self._child_coordinators)
+        )
+        times = []
+        for c in self._child_coordinators:
+            self.logger.debug(
+                "start_sun: child data=%s, states=%s",
+                c.data is not None,
+                c.data.states if c.data else None,
+            )
+            if c.data and c.data.states.get("start"):
+                times.append(c.data.states.get("start"))
+        result = min(times) if times else None
+        self.logger.debug("start_sun: returning %s", result)
+        return result
 
     @property
     def end_sun(self) -> dt.datetime | None:
         """Get latest end sun time from all covers."""
-        times = [
-            c.data.states.get("end")
-            for c in self._child_coordinators
-            if c.data and c.data.states.get("end")
-        ]
-        return max(times) if times else None
+        self.logger.debug(
+            "end_sun: %d child coordinators", len(self._child_coordinators)
+        )
+        times = []
+        for c in self._child_coordinators:
+            self.logger.debug(
+                "end_sun: child data=%s, states=%s",
+                c.data is not None,
+                c.data.states if c.data else None,
+            )
+            if c.data and c.data.states.get("end"):
+                times.append(c.data.states.get("end"))
+        result = max(times) if times else None
+        self.logger.debug("end_sun: returning %s", result)
+        return result
 
     @property
     def comfort_status(self) -> str | None:
         """Get comfort status from child covers (use first cover's status)."""
+        self.logger.debug(
+            "comfort_status: %d child coordinators", len(self._child_coordinators)
+        )
         for child in self._child_coordinators:
-            if child.comfort_status:
-                return child.comfort_status
+            status = child.comfort_status
+            self.logger.debug("comfort_status: child status=%s", status)
+            if status:
+                return status
+        self.logger.debug("comfort_status: returning None")
         return None
 
     async def async_check_entity_state_change(self, event) -> None:

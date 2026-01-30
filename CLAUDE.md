@@ -13,21 +13,34 @@ Adaptive Cover is a Home Assistant custom integration that calculates optimal bl
 ./scripts/setup
 
 # Run linter with auto-fix
-./scripts/lint
+uvx ruff check . --fix
+
+# Format code
+uvx ruff format .
 
 # Start Home Assistant dev server (port 8123)
 ./scripts/develop
-
-# Format code manually
-ruff check . --fix
-ruff format .
 ```
 
 ## Architecture
 
+### Entry Type Hierarchy
+
+The integration uses a **Room → Cover** hierarchy defined in `__init__.py`:
+
+- **Room Entry** (`EntryType.ROOM`): Container for shared settings (climate sensors, presence, weather). Creates `RoomCoordinator`. Stored with `room_{entry_id}` prefix for cover lookups.
+- **Cover Entry**: Can be standalone or belong to a room via `CONF_ROOM_ID`. Creates `AdaptiveDataUpdateCoordinator`.
+
+Platform assignment varies by entry type:
+- Room: `ROOM_PLATFORMS` (sensor, select, switch, binary_sensor)
+- Cover in room: `COVER_IN_ROOM_PLATFORMS` (sensor, binary_sensor, button)
+- Standalone cover: `STANDALONE_COVER_PLATFORMS` (all platforms)
+
 ### Core Components
 
-- **`coordinator.py`** - `AdaptiveDataUpdateCoordinator`: Central hub that tracks state changes from sun, temperature, weather, and cover entities. Triggers position recalculations and manages cover control.
+- **`room_coordinator.py`** - `RoomCoordinator`: Manages room-level shared state (control mode, sensor toggles, climate data). Aggregates data from child covers via `start_sun`, `end_sun`, `comfort_status` properties. Child coordinators register via `register_cover()`.
+
+- **`coordinator.py`** - `AdaptiveDataUpdateCoordinator`: Per-cover coordinator that tracks state changes from sun, temperature, weather, and cover entities. References `room_coordinator` if part of a room. Triggers position recalculations and manages cover control.
 
 - **`calculation.py`** - Cover position calculation classes:
   - `AdaptiveVerticalCover` - Up/down blinds
@@ -39,20 +52,22 @@ ruff format .
 
 - **`config_flow.py`** - Configuration UI with extensive options for window parameters, climate settings, and automation rules.
 
-### Platform Entities
-
-The integration creates entities across four platforms:
-- `sensor` - Position values, start/end times, control method
-- `switch` - Toggle control, climate mode, manual override detection
-- `binary_sensor` - Manual override status, sun-in-front detection
-- `button` - Reset manual override
-
 ### Data Flow
 
-1. `sun.sun` state changes trigger `coordinator.async_check_entity_state_change`
-2. Coordinator retrieves current sun position, temperature, weather, presence
-3. Calculation classes compute optimal position based on mode (basic/climate)
-4. Position sensor updates; if control is enabled, cover service calls are made
+1. `sun.sun` state changes trigger coordinator's `async_check_entity_state_change`
+2. For room members: Room coordinator notifies children via `async_notify_children()`
+3. Coordinator retrieves current sun position, temperature, weather, presence
+4. Calculation classes compute optimal position based on mode (basic/climate)
+5. Position sensor updates; if control is enabled, cover service calls are made
+6. Room aggregates child data for room-level sensors (start/end sun times, comfort status)
+
+### Coordinator Registration Flow
+
+When a cover belongs to a room (`CONF_ROOM_ID` set):
+1. Room entry sets up first, stores coordinator at `hass.data[DOMAIN][f"room_{entry_id}"]`
+2. Cover entry looks up room coordinator, passes to `AdaptiveDataUpdateCoordinator`
+3. After cover's first refresh, `room_coordinator.register_cover(coordinator)` is called
+4. Room's `async_refresh()` triggers to update aggregated sensors
 
 ## Key Dependencies
 
@@ -64,6 +79,7 @@ The integration creates entities across four platforms:
 
 All configuration keys are in `const.py`. Key prefixes:
 - `CONF_*` - Configuration option keys
+- `CONF_ENTRY_TYPE` / `CONF_ROOM_ID` - Entry hierarchy identifiers
 - Window geometry: `CONF_AZIMUTH`, `CONF_HEIGHT_WIN`, `CONF_FOV_LEFT/RIGHT`
 - Climate: `CONF_TEMP_ENTITY`, `CONF_TEMP_LOW/HIGH`, `CONF_WEATHER_ENTITY`
 - Automation: `CONF_DELTA_POSITION`, `CONF_DELTA_TIME`, `CONF_MANUAL_OVERRIDE_*`
@@ -81,3 +97,14 @@ No unit test framework. Testing is done via:
 - Pre-commit hooks enforce formatting
 - Target Python 3.12
 - Follow Home Assistant integration patterns (DataUpdateCoordinator, ConfigEntry, etc.)
+
+## Debugging
+
+Use `ConfigContextAdapter` logger wrapper (from `config_context_adapter.py`) for context-aware logging. Room and cover coordinators use this to prefix logs with entry name.
+
+Enable debug logging in Home Assistant:
+```yaml
+logger:
+  logs:
+    custom_components.adaptive_cover: debug
+```
