@@ -305,7 +305,7 @@ CLIMATE_OPTIONS = vol.Schema(
         vol.Optional(CONF_CLOUD_ENTITY, default=vol.UNDEFINED): selector.EntitySelector(
             selector.EntityFilterSelectorConfig(domain=["sensor"])
         ),
-        vol.Optional(CONF_CLOUD_THRESHOLD, default=80): selector.NumberSelector(
+        vol.Optional(CONF_CLOUD_THRESHOLD, default=100): selector.NumberSelector(
             selector.NumberSelectorConfig(
                 min=0, max=100, step=1, mode="slider", unit_of_measurement="%"
             )
