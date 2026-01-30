@@ -49,12 +49,12 @@ async def async_setup_entry(
         entities.append(control_mode_select)
     else:
         # Cover entry - only add control mode select for standalone covers with entities
-        if len(config_entry.options.get(CONF_ENTITIES, [])) >= 1:
+        # Covers inside a room don't get control mode (room controls this)
+        if len(config_entry.options.get(CONF_ENTITIES, [])) >= 1 and not room_id:
             control_mode_select = ControlModeSelect(
                 config_entry,
                 config_entry.entry_id,
                 coordinator,
-                room_id=room_id,
             )
             entities.append(control_mode_select)
 

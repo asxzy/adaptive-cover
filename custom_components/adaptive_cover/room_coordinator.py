@@ -337,6 +337,32 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
             child.state_change = True
             await child.async_refresh()
 
+    async def async_force_update_covers(self) -> None:
+        """Force update all covers in this room."""
+        self.logger.info("Force updating all covers in room")
+        for child in self._child_coordinators:
+            await child.async_force_update_covers()
+
+    @property
+    def start_sun(self) -> dt.datetime | None:
+        """Get earliest start sun time from all covers."""
+        times = [
+            c.data.states.get("start")
+            for c in self._child_coordinators
+            if c.data and c.data.states.get("start")
+        ]
+        return min(times) if times else None
+
+    @property
+    def end_sun(self) -> dt.datetime | None:
+        """Get latest end sun time from all covers."""
+        times = [
+            c.data.states.get("end")
+            for c in self._child_coordinators
+            if c.data and c.data.states.get("end")
+        ]
+        return max(times) if times else None
+
     async def async_check_entity_state_change(self, event) -> None:
         """Handle state change for tracked entities."""
         self.logger.debug("Room entity state change")

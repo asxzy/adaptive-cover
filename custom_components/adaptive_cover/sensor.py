@@ -46,7 +46,7 @@ async def async_setup_entry(
 
     entities = []
 
-    # Room entry - only cloud coverage sensor
+    # Room entry - cloud coverage sensor and aggregated time sensors
     if entry_type == EntryType.ROOM:
         cloud_entity = config_entry.options.get(CONF_CLOUD_ENTITY)
         if cloud_entity:
@@ -60,7 +60,30 @@ async def async_setup_entry(
             )
             entities.append(cloud_sensor)
 
-    # Cover entry - position, time, and control sensors
+        # Aggregated Start Sun and End Sun sensors for room
+        start = AdaptiveRoomTimeSensorEntity(
+            config_entry.entry_id,
+            hass,
+            config_entry,
+            name,
+            "Start Sun",
+            "start_sun",
+            "mdi:sun-clock-outline",
+            coordinator,
+        )
+        end = AdaptiveRoomTimeSensorEntity(
+            config_entry.entry_id,
+            hass,
+            config_entry,
+            name,
+            "End Sun",
+            "end_sun",
+            "mdi:sun-clock",
+            coordinator,
+        )
+        entities.extend([start, end])
+
+    # Cover entry - position sensor always, time sensors only for standalone
     else:
         sensor = AdaptiveCoverSensorEntity(
             config_entry.entry_id,
@@ -70,44 +93,43 @@ async def async_setup_entry(
             coordinator,
             room_id=room_id,
         )
-        start = AdaptiveCoverTimeSensorEntity(
-            config_entry.entry_id,
-            hass,
-            config_entry,
-            name,
-            "Start Sun",
-            "start",
-            "mdi:sun-clock-outline",
-            coordinator,
-            room_id=room_id,
-        )
-        end = AdaptiveCoverTimeSensorEntity(
-            config_entry.entry_id,
-            hass,
-            config_entry,
-            name,
-            "End Sun",
-            "end",
-            "mdi:sun-clock",
-            coordinator,
-            room_id=room_id,
-        )
-        entities.extend([sensor, start, end])
+        entities.append(sensor)
 
-        # Comfort Status only for standalone covers (room handles this)
+        # Time sensors only for standalone covers (room provides aggregated values)
         if not room_id:
+            start = AdaptiveCoverTimeSensorEntity(
+                config_entry.entry_id,
+                hass,
+                config_entry,
+                name,
+                "Start Sun",
+                "start",
+                "mdi:sun-clock-outline",
+                coordinator,
+            )
+            end = AdaptiveCoverTimeSensorEntity(
+                config_entry.entry_id,
+                hass,
+                config_entry,
+                name,
+                "End Sun",
+                "end",
+                "mdi:sun-clock",
+                coordinator,
+            )
+            entities.extend([start, end])
+
+            # Comfort Status only for standalone covers (room handles this)
             control = AdaptiveCoverControlSensorEntity(
                 config_entry.entry_id,
                 hass,
                 config_entry,
                 name,
                 coordinator,
-                room_id=room_id,
             )
             entities.append(control)
 
-        # Add cloud coverage sensor only for standalone covers
-        if not room_id:
+            # Add cloud coverage sensor only for standalone covers
             cloud_entity = config_entry.options.get(CONF_CLOUD_ENTITY)
             if cloud_entity:
                 cloud_sensor = AdaptiveCoverCloudSensorEntity(
@@ -255,6 +277,56 @@ class AdaptiveCoverTimeSensorEntity(
         if self._room_id:
             info["via_device"] = (DOMAIN, f"room_{self._room_id}")
         return info
+
+
+class AdaptiveRoomTimeSensorEntity(CoordinatorEntity[RoomCoordinator], SensorEntity):
+    """Adaptive Cover Room Time Sensor for aggregated Start/End Sun times."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        unique_id: str,
+        hass,
+        config_entry,
+        name: str,
+        sensor_name: str,
+        key: str,
+        icon: str,
+        coordinator: RoomCoordinator,
+    ) -> None:
+        """Initialize adaptive_cover Room Time Sensor."""
+        super().__init__(coordinator=coordinator)
+        self._attr_icon = icon
+        self.key = key
+        self.coordinator = coordinator
+        self._attr_unique_id = f"{unique_id}_{sensor_name}"
+        self._device_id = unique_id
+        self.hass = hass
+        self.config_entry = config_entry
+        self._name = name
+        self._attr_name = sensor_name
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self):
+        """Return the aggregated time value from room coordinator."""
+        return getattr(self.coordinator, self.key, None)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        return DeviceInfo(
+            entry_type=DeviceEntryType.SERVICE,
+            identifiers={(DOMAIN, f"room_{self._device_id}")},
+            name=f"Room: {self._name}",
+        )
 
 
 class AdaptiveCoverControlSensorEntity(

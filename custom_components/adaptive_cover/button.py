@@ -9,8 +9,11 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_ENTITIES, CONF_ROOM_ID, DOMAIN
+from .const import CONF_ENTITIES, CONF_ENTRY_TYPE, CONF_ROOM_ID, DOMAIN, EntryType
 from .coordinator import AdaptiveDataUpdateCoordinator
+from .room_coordinator import RoomCoordinator
+
+CoordinatorType = AdaptiveDataUpdateCoordinator | RoomCoordinator
 
 
 async def async_setup_entry(
@@ -19,27 +22,35 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the button platform."""
-    coordinator: AdaptiveDataUpdateCoordinator = hass.data[DOMAIN][
-        config_entry.entry_id
-    ]
+    coordinator: CoordinatorType = hass.data[DOMAIN][config_entry.entry_id]
+    entry_type = config_entry.data.get(CONF_ENTRY_TYPE)
     room_id = config_entry.data.get(CONF_ROOM_ID)
 
     entities = []
 
-    # Only add force update button if there are cover entities configured
-    if len(config_entry.options.get(CONF_ENTITIES, [])) >= 1:
+    # Room entry - add force update button for all covers in room
+    if entry_type == EntryType.ROOM:
         force_update_button = ForceUpdateButton(
             config_entry,
             config_entry.entry_id,
             coordinator,
-            room_id=room_id,
+            is_room=True,
         )
         entities.append(force_update_button)
+    # Standalone cover - add force update button if cover entities configured
+    elif not room_id and len(config_entry.options.get(CONF_ENTITIES, [])) >= 1:
+        force_update_button = ForceUpdateButton(
+            config_entry,
+            config_entry.entry_id,
+            coordinator,
+        )
+        entities.append(force_update_button)
+    # Cover in room - no button (room handles this)
 
     async_add_entities(entities)
 
 
-class ForceUpdateButton(CoordinatorEntity[AdaptiveDataUpdateCoordinator], ButtonEntity):
+class ForceUpdateButton(CoordinatorEntity[CoordinatorType], ButtonEntity):
     """Button to force update cover position immediately."""
 
     _attr_has_entity_name = True
@@ -49,8 +60,8 @@ class ForceUpdateButton(CoordinatorEntity[AdaptiveDataUpdateCoordinator], Button
         self,
         config_entry: ConfigEntry,
         unique_id: str,
-        coordinator: AdaptiveDataUpdateCoordinator,
-        room_id: str | None = None,
+        coordinator: CoordinatorType,
+        is_room: bool = False,
     ) -> None:
         """Initialize the button."""
         super().__init__(coordinator=coordinator)
@@ -58,22 +69,20 @@ class ForceUpdateButton(CoordinatorEntity[AdaptiveDataUpdateCoordinator], Button
         self._attr_unique_id = f"{unique_id}_force_update"
         self._attr_icon = "mdi:refresh"
         self._device_id = unique_id
-        self._room_id = room_id
+        self._is_room = is_room
+        self._attr_name = "Force Update"
 
-        # When cover belongs to a room, include cover name in entity name
-        if room_id:
-            self._attr_has_entity_name = False
-            self._attr_name = f"{self._name} Force Update"
+        # Set device info based on entry type
+        if is_room:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"room_{self._device_id}")},
+                name=f"Room: {self._name}",
+            )
         else:
-            self._attr_name = "Force Update"
-
-        info = DeviceInfo(
-            identifiers={(DOMAIN, self._device_id)},
-            name=self._name,
-        )
-        if room_id:
-            info["via_device"] = (DOMAIN, f"room_{room_id}")
-        self._attr_device_info = info
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, self._device_id)},
+                name=self._name,
+            )
 
         self.coordinator.logger.debug("Setup force update button")
 
