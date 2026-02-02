@@ -4,8 +4,8 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-# Install development requirements
-python3 -m pip install --requirement requirements-dev.txt
+# Sync development dependencies using uv
+uv sync --group dev
 
 # Setup git commit hooks
-pre-commit install
+uv run pre-commit install

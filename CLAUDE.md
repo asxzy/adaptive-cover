@@ -32,6 +32,7 @@ The integration uses a **Room → Cover** hierarchy defined in `__init__.py`:
 - **Cover Entry**: Can be standalone or belong to a room via `CONF_ROOM_ID`. Creates `AdaptiveDataUpdateCoordinator`.
 
 Platform assignment varies by entry type:
+
 - Room: `ROOM_PLATFORMS` (sensor, select, switch, binary_sensor)
 - Cover in room: `COVER_IN_ROOM_PLATFORMS` (sensor, binary_sensor, button)
 - Standalone cover: `STANDALONE_COVER_PLATFORMS` (all platforms)
@@ -43,6 +44,7 @@ Platform assignment varies by entry type:
 - **`coordinator.py`** - `AdaptiveDataUpdateCoordinator`: Per-cover coordinator that tracks state changes from sun, temperature, weather, and cover entities. References `room_coordinator` if part of a room. Triggers position recalculations and manages cover control.
 
 - **`calculation.py`** - Cover position calculation classes:
+
   - `AdaptiveVerticalCover` - Up/down blinds
   - `AdaptiveHorizontalCover` - In/out awnings
   - `AdaptiveTiltCover` - Venetian blind slat angles
@@ -64,6 +66,7 @@ Platform assignment varies by entry type:
 ### Coordinator Registration Flow
 
 When a cover belongs to a room (`CONF_ROOM_ID` set):
+
 1. Room entry sets up first, stores coordinator at `hass.data[DOMAIN][f"room_{entry_id}"]`
 2. Cover entry looks up room coordinator, passes to `AdaptiveDataUpdateCoordinator`
 3. After cover's first refresh, `room_coordinator.register_cover(coordinator)` is called
@@ -78,6 +81,7 @@ When a cover belongs to a room (`CONF_ROOM_ID` set):
 ## Configuration Constants
 
 All configuration keys are in `const.py`. Key prefixes:
+
 - `CONF_*` - Configuration option keys
 - `CONF_ENTRY_TYPE` / `CONF_ROOM_ID` - Entry hierarchy identifiers
 - Window geometry: `CONF_AZIMUTH`, `CONF_HEIGHT_WIN`, `CONF_FOV_LEFT/RIGHT`
@@ -87,6 +91,7 @@ All configuration keys are in `const.py`. Key prefixes:
 ## Testing
 
 No unit test framework. Testing is done via:
+
 1. Home Assistant dev server (`./scripts/develop`)
 2. CI validation: hassfest (manifest) and HACS checks
 3. Jupyter notebook at `notebooks/test_env.ipynb` for simulation/visualization
@@ -103,6 +108,7 @@ No unit test framework. Testing is done via:
 Use `ConfigContextAdapter` logger wrapper (from `config_context_adapter.py`) for context-aware logging. Room and cover coordinators use this to prefix logs with entry name.
 
 Enable debug logging in Home Assistant:
+
 ```yaml
 logger:
   logs:
