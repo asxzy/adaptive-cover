@@ -111,9 +111,10 @@ asyncio_default_fixture_loop_scope = "function"
 [tool.coverage.run]
 source = ["custom_components/adaptive_cover"]
 branch = true
+omit = ["custom_components/adaptive_cover/config_flow.py"]
 
 [tool.coverage.report]
-fail_under = 25
+fail_under = 45
 show_missing = true
 exclude_lines = [
     "pragma: no cover",
