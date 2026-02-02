@@ -13,6 +13,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -31,6 +32,49 @@ from .room_coordinator import RoomCoordinator
 CoordinatorType = AdaptiveDataUpdateCoordinator | RoomCoordinator
 
 
+def _cleanup_orphaned_binary_sensors(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    entry_type: str | None,
+    room_id: str | None,
+) -> None:
+    """Remove binary sensors that should no longer exist based on config."""
+    ent_reg = er.async_get(hass)
+    entry_id = config_entry.entry_id
+
+    if entry_type == EntryType.ROOM:
+        # Remove presence sensor if not configured
+        if not config_entry.options.get(CONF_PRESENCE_ENTITY):
+            entity_id = ent_reg.async_get_entity_id(
+                "binary_sensor", DOMAIN, f"{entry_id}_Room Occupied"
+            )
+            if entity_id:
+                ent_reg.async_remove(entity_id)
+
+        # Remove weather sensor if not configured
+        if not config_entry.options.get(CONF_WEATHER_ENTITY):
+            entity_id = ent_reg.async_get_entity_id(
+                "binary_sensor", DOMAIN, f"{entry_id}_Weather Has Direct Sun"
+            )
+            if entity_id:
+                ent_reg.async_remove(entity_id)
+
+    elif not room_id:  # Standalone cover
+        if not config_entry.options.get(CONF_PRESENCE_ENTITY):
+            entity_id = ent_reg.async_get_entity_id(
+                "binary_sensor", DOMAIN, f"{entry_id}_Room Occupied"
+            )
+            if entity_id:
+                ent_reg.async_remove(entity_id)
+
+        if not config_entry.options.get(CONF_WEATHER_ENTITY):
+            entity_id = ent_reg.async_get_entity_id(
+                "binary_sensor", DOMAIN, f"{entry_id}_Weather Has Direct Sun"
+            )
+            if entity_id:
+                ent_reg.async_remove(entity_id)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -40,6 +84,9 @@ async def async_setup_entry(
     coordinator: CoordinatorType = hass.data[DOMAIN][config_entry.entry_id]
     entry_type = config_entry.data.get(CONF_ENTRY_TYPE)
     room_id = config_entry.data.get(CONF_ROOM_ID)
+
+    # Clean up orphaned sensors from previous configurations
+    _cleanup_orphaned_binary_sensors(hass, config_entry, entry_type, room_id)
 
     entities: list[BinarySensorEntity] = []
 

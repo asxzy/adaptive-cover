@@ -15,6 +15,7 @@ from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -36,6 +37,45 @@ from .coordinator import AdaptiveDataUpdateCoordinator
 from .room_coordinator import RoomCoordinator
 
 CoordinatorType = AdaptiveDataUpdateCoordinator | RoomCoordinator
+
+
+def _cleanup_orphaned_sensors(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    entry_type: str | None,
+) -> None:
+    """Remove sensors that should no longer exist based on config."""
+    if entry_type != EntryType.ROOM:
+        return
+
+    ent_reg = er.async_get(hass)
+    entry_id = config_entry.entry_id
+
+    # Remove cloud sensor if not configured
+    if not config_entry.options.get(CONF_CLOUD_ENTITY):
+        entity_id = ent_reg.async_get_entity_id(
+            "sensor", DOMAIN, f"{entry_id}_Cloud Coverage"
+        )
+        if entity_id:
+            ent_reg.async_remove(entity_id)
+
+    # Remove outside temp sensor if neither outside temp nor weather configured
+    if not config_entry.options.get(
+        CONF_OUTSIDETEMP_ENTITY
+    ) and not config_entry.options.get(CONF_WEATHER_ENTITY):
+        entity_id = ent_reg.async_get_entity_id(
+            "sensor", DOMAIN, f"{entry_id}_Outside Temperature"
+        )
+        if entity_id:
+            ent_reg.async_remove(entity_id)
+
+    # Remove comfort status sensor if temp entity not configured
+    if not config_entry.options.get(CONF_TEMP_ENTITY):
+        entity_id = ent_reg.async_get_entity_id(
+            "sensor", DOMAIN, f"{entry_id}_Comfort Status"
+        )
+        if entity_id:
+            ent_reg.async_remove(entity_id)
 
 
 class ProxySensorEntity(SensorEntity):
@@ -265,6 +305,9 @@ async def async_setup_entry(
     coordinator: CoordinatorType = hass.data[DOMAIN][config_entry.entry_id]
     entry_type = config_entry.data.get(CONF_ENTRY_TYPE)
     room_id = config_entry.data.get(CONF_ROOM_ID)
+
+    # Clean up orphaned sensors from previous configurations
+    _cleanup_orphaned_sensors(hass, config_entry, entry_type)
 
     entities = []
 
