@@ -11,7 +11,9 @@ import pytest
 from custom_components.adaptive_cover.const import (
     CONF_CLOUD_ENTITY,
     CONF_ENTRY_TYPE,
+    CONF_OUTSIDETEMP_ENTITY,
     CONF_ROOM_ID,
+    CONF_TEMP_ENTITY,
     CONTROL_MODE_AUTO,
     CONTROL_MODE_DISABLED,
     DOMAIN,
@@ -875,7 +877,10 @@ class TestSensorAsyncSetupEntry:
         entry = MagicMock()
         entry.entry_id = "test_room_entry"
         entry.data = {"name": "Test Room", CONF_ENTRY_TYPE: EntryType.ROOM}
-        entry.options = {}
+        entry.options = {
+            CONF_OUTSIDETEMP_ENTITY: "sensor.outside_temp",
+            CONF_TEMP_ENTITY: "sensor.inside_temp",
+        }
         return entry
 
     @pytest.fixture
@@ -884,7 +889,11 @@ class TestSensorAsyncSetupEntry:
         entry = MagicMock()
         entry.entry_id = "test_room_entry"
         entry.data = {"name": "Test Room", CONF_ENTRY_TYPE: EntryType.ROOM}
-        entry.options = {CONF_CLOUD_ENTITY: "sensor.cloud"}
+        entry.options = {
+            CONF_CLOUD_ENTITY: "sensor.cloud",
+            CONF_OUTSIDETEMP_ENTITY: "sensor.outside_temp",
+            CONF_TEMP_ENTITY: "sensor.inside_temp",
+        }
         return entry
 
     @pytest.fixture
@@ -893,7 +902,9 @@ class TestSensorAsyncSetupEntry:
         entry = MagicMock()
         entry.entry_id = "test_cover_entry"
         entry.data = {"name": "Test Cover", CONF_ENTRY_TYPE: EntryType.COVER}
-        entry.options = {}
+        entry.options = {
+            CONF_TEMP_ENTITY: "sensor.inside_temp",
+        }
         return entry
 
     @pytest.fixture
@@ -902,7 +913,10 @@ class TestSensorAsyncSetupEntry:
         entry = MagicMock()
         entry.entry_id = "test_cover_entry"
         entry.data = {"name": "Test Cover", CONF_ENTRY_TYPE: EntryType.COVER}
-        entry.options = {CONF_CLOUD_ENTITY: "sensor.cloud"}
+        entry.options = {
+            CONF_CLOUD_ENTITY: "sensor.cloud",
+            CONF_TEMP_ENTITY: "sensor.inside_temp",
+        }
         return entry
 
     @pytest.fixture

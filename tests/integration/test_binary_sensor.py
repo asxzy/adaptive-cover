@@ -11,7 +11,9 @@ import pytest
 from custom_components.adaptive_cover.binary_sensor import AdaptiveCoverBinarySensor
 from custom_components.adaptive_cover.const import (
     CONF_ENTRY_TYPE,
+    CONF_PRESENCE_ENTITY,
     CONF_ROOM_ID,
+    CONF_WEATHER_ENTITY,
     DOMAIN,
     EntryType,
 )
@@ -440,7 +442,10 @@ class TestBinarySensorAsyncSetupEntry:
         entry = MagicMock()
         entry.entry_id = "test_room_entry"
         entry.data = {"name": "Test Room", CONF_ENTRY_TYPE: EntryType.ROOM}
-        entry.options = {}
+        entry.options = {
+            CONF_PRESENCE_ENTITY: "binary_sensor.presence",
+            CONF_WEATHER_ENTITY: "weather.home",
+        }
         return entry
 
     @pytest.fixture
@@ -449,7 +454,10 @@ class TestBinarySensorAsyncSetupEntry:
         entry = MagicMock()
         entry.entry_id = "test_cover_entry"
         entry.data = {"name": "Test Cover", CONF_ENTRY_TYPE: EntryType.COVER}
-        entry.options = {}
+        entry.options = {
+            CONF_PRESENCE_ENTITY: "binary_sensor.presence",
+            CONF_WEATHER_ENTITY: "weather.home",
+        }
         return entry
 
     @pytest.fixture

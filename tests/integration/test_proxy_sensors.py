@@ -15,8 +15,13 @@ from custom_components.adaptive_cover.binary_sensor import (
     RoomCoverSunInfrontProxySensor,
 )
 from custom_components.adaptive_cover.const import (
+    CONF_CLOUD_ENTITY,
     CONF_ENTRY_TYPE,
+    CONF_OUTSIDETEMP_ENTITY,
+    CONF_PRESENCE_ENTITY,
     CONF_ROOM_ID,
+    CONF_TEMP_ENTITY,
+    CONF_WEATHER_ENTITY,
     DOMAIN,
     SIGNAL_COVER_REGISTERED,
     EntryType,
@@ -919,7 +924,11 @@ class TestSensorAsyncSetupEntryProxySensors:
         entry = MagicMock()
         entry.entry_id = "room_123"
         entry.data = {"name": "Test Room", CONF_ENTRY_TYPE: EntryType.ROOM}
-        entry.options = {}
+        entry.options = {
+            CONF_CLOUD_ENTITY: "sensor.cloud",
+            CONF_OUTSIDETEMP_ENTITY: "sensor.outside_temp",
+            CONF_TEMP_ENTITY: "sensor.inside_temp",
+        }
         entry.async_on_unload = MagicMock()
         return entry
 
@@ -1050,7 +1059,10 @@ class TestBinarySensorAsyncSetupEntryProxySensors:
         entry = MagicMock()
         entry.entry_id = "room_123"
         entry.data = {"name": "Test Room", CONF_ENTRY_TYPE: EntryType.ROOM}
-        entry.options = {}
+        entry.options = {
+            CONF_PRESENCE_ENTITY: "binary_sensor.presence",
+            CONF_WEATHER_ENTITY: "weather.home",
+        }
         entry.async_on_unload = MagicMock()
         return entry
 

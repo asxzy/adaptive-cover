@@ -41,7 +41,8 @@ class TestPlatformConstants:
         assert Platform.SELECT in ROOM_PLATFORMS
         assert Platform.SWITCH in ROOM_PLATFORMS
         assert Platform.BINARY_SENSOR in ROOM_PLATFORMS
-        assert len(ROOM_PLATFORMS) == 4
+        assert Platform.BUTTON in ROOM_PLATFORMS
+        assert len(ROOM_PLATFORMS) == 5
 
     def test_cover_in_room_platforms(self) -> None:
         """Test COVER_IN_ROOM_PLATFORMS contains expected platforms."""

@@ -23,7 +23,10 @@ from .const import (
     _LOGGER,
     CONF_CLOUD_ENTITY,
     CONF_ENTRY_TYPE,
+    CONF_OUTSIDETEMP_ENTITY,
     CONF_ROOM_ID,
+    CONF_TEMP_ENTITY,
+    CONF_WEATHER_ENTITY,
     CONTROL_MODE_DISABLED,
     DOMAIN,
     EntryType,
@@ -280,25 +283,30 @@ async def async_setup_entry(
             )
             entities.append(cloud_sensor)
 
-        # Outside temperature sensor for room
-        outside_temp = AdaptiveRoomOutsideTempSensorEntity(
-            config_entry.entry_id,
-            hass,
-            config_entry,
-            name,
-            coordinator,
-        )
-        entities.append(outside_temp)
+        # Outside temperature sensor for room (if outside temp or weather entity configured)
+        outside_temp_entity = config_entry.options.get(CONF_OUTSIDETEMP_ENTITY)
+        weather_entity = config_entry.options.get(CONF_WEATHER_ENTITY)
+        if outside_temp_entity or weather_entity:
+            outside_temp = AdaptiveRoomOutsideTempSensorEntity(
+                config_entry.entry_id,
+                hass,
+                config_entry,
+                name,
+                coordinator,
+            )
+            entities.append(outside_temp)
 
-        # Comfort Status sensor for room
-        comfort_status = AdaptiveRoomComfortStatusSensorEntity(
-            config_entry.entry_id,
-            hass,
-            config_entry,
-            name,
-            coordinator,
-        )
-        entities.append(comfort_status)
+        # Comfort Status sensor for room (if temp entity configured)
+        temp_entity = config_entry.options.get(CONF_TEMP_ENTITY)
+        if temp_entity:
+            comfort_status = AdaptiveRoomComfortStatusSensorEntity(
+                config_entry.entry_id,
+                hass,
+                config_entry,
+                name,
+                coordinator,
+            )
+            entities.append(comfort_status)
 
         # Store callback for dynamic proxy sensor creation
         hass.data[DOMAIN][f"room_{config_entry.entry_id}_add_sensors"] = (
@@ -371,45 +379,56 @@ async def async_setup_entry(
         if room_id:
             room_coordinator = hass.data[DOMAIN].get(f"room_{room_id}")
             if room_coordinator:
-                # Cloud coverage proxy
-                cloud_proxy = CoverRoomCloudProxySensor(
-                    room_coordinator,
-                    config_entry.entry_id,
-                    name,
-                    room_id,
-                )
-                entities.append(cloud_proxy)
+                room_options = room_coordinator.config_entry.options
 
-                # Outside temperature proxy
-                temp_proxy = CoverRoomTempProxySensor(
-                    hass,
-                    room_coordinator,
-                    config_entry.entry_id,
-                    name,
-                    room_id,
-                )
-                entities.append(temp_proxy)
+                # Cloud coverage proxy (only if room has cloud entity configured)
+                if room_options.get(CONF_CLOUD_ENTITY):
+                    cloud_proxy = CoverRoomCloudProxySensor(
+                        room_coordinator,
+                        config_entry.entry_id,
+                        name,
+                        room_id,
+                    )
+                    entities.append(cloud_proxy)
 
-                # Comfort status proxy
-                comfort_proxy = CoverRoomComfortProxySensor(
-                    room_coordinator,
-                    config_entry.entry_id,
-                    name,
-                    room_id,
-                )
-                entities.append(comfort_proxy)
+                # Outside temperature proxy (only if room has outside temp or weather)
+                outside_temp_entity = room_options.get(CONF_OUTSIDETEMP_ENTITY)
+                weather_entity = room_options.get(CONF_WEATHER_ENTITY)
+                if outside_temp_entity or weather_entity:
+                    temp_proxy = CoverRoomTempProxySensor(
+                        hass,
+                        room_coordinator,
+                        config_entry.entry_id,
+                        name,
+                        room_id,
+                    )
+                    entities.append(temp_proxy)
+
+                # Comfort status proxy (only if room has temp entity configured)
+                if room_options.get(CONF_TEMP_ENTITY):
+                    comfort_proxy = CoverRoomComfortProxySensor(
+                        room_coordinator,
+                        config_entry.entry_id,
+                        name,
+                        room_id,
+                    )
+                    entities.append(comfort_proxy)
         else:
             # Standalone covers get their own comfort status and cloud sensors
-            control = AdaptiveCoverControlSensorEntity(
-                config_entry.entry_id,
-                hass,
-                config_entry,
-                name,
-                coordinator,
-            )
-            entities.append(control)
 
-            # Add cloud coverage sensor only for standalone covers
+            # Comfort status sensor (only if temp entity configured)
+            temp_entity = config_entry.options.get(CONF_TEMP_ENTITY)
+            if temp_entity:
+                control = AdaptiveCoverControlSensorEntity(
+                    config_entry.entry_id,
+                    hass,
+                    config_entry,
+                    name,
+                    coordinator,
+                )
+                entities.append(control)
+
+            # Add cloud coverage sensor only for standalone covers (if configured)
             cloud_entity = config_entry.options.get(CONF_CLOUD_ENTITY)
             if cloud_entity:
                 cloud_sensor = AdaptiveCoverCloudSensorEntity(

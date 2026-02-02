@@ -18,7 +18,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     CONF_ENTRY_TYPE,
+    CONF_PRESENCE_ENTITY,
     CONF_ROOM_ID,
+    CONF_WEATHER_ENTITY,
     DOMAIN,
     SIGNAL_COVER_REGISTERED,
     EntryType,
@@ -43,27 +45,35 @@ async def async_setup_entry(
 
     # Room entry - presence sensor + per-cover proxy sensors
     if entry_type == EntryType.ROOM:
-        is_presence = AdaptiveCoverBinarySensor(
-            config_entry,
-            config_entry.entry_id,
-            "Room Occupied",
-            False,
-            "is_presence",
-            BinarySensorDeviceClass.OCCUPANCY,
-            coordinator,
-            is_room=True,
-        )
-        has_direct_sun = AdaptiveCoverBinarySensor(
-            config_entry,
-            config_entry.entry_id,
-            "Weather Has Direct Sun",
-            False,
-            "has_direct_sun",
-            BinarySensorDeviceClass.LIGHT,
-            coordinator,
-            is_room=True,
-        )
-        entities.extend([is_presence, has_direct_sun])
+        # Only create presence sensor if presence entity is configured
+        presence_entity = config_entry.options.get(CONF_PRESENCE_ENTITY)
+        if presence_entity:
+            is_presence = AdaptiveCoverBinarySensor(
+                config_entry,
+                config_entry.entry_id,
+                "Room Occupied",
+                False,
+                "is_presence",
+                BinarySensorDeviceClass.OCCUPANCY,
+                coordinator,
+                is_room=True,
+            )
+            entities.append(is_presence)
+
+        # Only create weather sensor if weather entity is configured
+        weather_entity = config_entry.options.get(CONF_WEATHER_ENTITY)
+        if weather_entity:
+            has_direct_sun = AdaptiveCoverBinarySensor(
+                config_entry,
+                config_entry.entry_id,
+                "Weather Has Direct Sun",
+                False,
+                "has_direct_sun",
+                BinarySensorDeviceClass.LIGHT,
+                coordinator,
+                is_room=True,
+            )
+            entities.append(has_direct_sun)
 
         # Create proxy sensors for already-registered covers
         for cover_coord in coordinator._child_coordinators:
@@ -123,49 +133,60 @@ async def async_setup_entry(
         if room_id and coordinator.room_coordinator:
             room_coordinator = coordinator.room_coordinator
             cover_name = config_entry.data.get("name", "Cover")
+            room_options = room_coordinator.config_entry.options
 
-            # Occupied proxy
-            entities.append(
-                CoverRoomOccupiedProxySensor(
-                    source_coordinator=room_coordinator,
-                    cover_coordinator=coordinator,
-                    cover_name=cover_name,
-                    cover_id=config_entry.entry_id,
-                    room_id=room_id,
+            # Occupied proxy - only if room has presence entity configured
+            if room_options.get(CONF_PRESENCE_ENTITY):
+                entities.append(
+                    CoverRoomOccupiedProxySensor(
+                        source_coordinator=room_coordinator,
+                        cover_coordinator=coordinator,
+                        cover_name=cover_name,
+                        cover_id=config_entry.entry_id,
+                        room_id=room_id,
+                    )
                 )
-            )
-            # Direct Sun proxy
-            entities.append(
-                CoverRoomDirectSunProxySensor(
-                    source_coordinator=room_coordinator,
-                    cover_coordinator=coordinator,
-                    cover_name=cover_name,
-                    cover_id=config_entry.entry_id,
-                    room_id=room_id,
+            # Direct Sun proxy - only if room has weather entity configured
+            if room_options.get(CONF_WEATHER_ENTITY):
+                entities.append(
+                    CoverRoomDirectSunProxySensor(
+                        source_coordinator=room_coordinator,
+                        cover_coordinator=coordinator,
+                        cover_name=cover_name,
+                        cover_id=config_entry.entry_id,
+                        room_id=room_id,
+                    )
                 )
-            )
 
-        # Standalone cover also gets presence and weather sensors
+        # Standalone cover also gets presence and weather sensors (if configured)
         elif not room_id:
-            is_presence = AdaptiveCoverBinarySensor(
-                config_entry,
-                config_entry.entry_id,
-                "Room Occupied",
-                False,
-                "is_presence",
-                BinarySensorDeviceClass.OCCUPANCY,
-                coordinator,
-            )
-            has_direct_sun = AdaptiveCoverBinarySensor(
-                config_entry,
-                config_entry.entry_id,
-                "Weather Has Direct Sun",
-                False,
-                "has_direct_sun",
-                BinarySensorDeviceClass.LIGHT,
-                coordinator,
-            )
-            entities.extend([is_presence, has_direct_sun])
+            # Only create presence sensor if configured
+            presence_entity = config_entry.options.get(CONF_PRESENCE_ENTITY)
+            if presence_entity:
+                is_presence = AdaptiveCoverBinarySensor(
+                    config_entry,
+                    config_entry.entry_id,
+                    "Room Occupied",
+                    False,
+                    "is_presence",
+                    BinarySensorDeviceClass.OCCUPANCY,
+                    coordinator,
+                )
+                entities.append(is_presence)
+
+            # Only create weather sensor if configured
+            weather_entity = config_entry.options.get(CONF_WEATHER_ENTITY)
+            if weather_entity:
+                has_direct_sun = AdaptiveCoverBinarySensor(
+                    config_entry,
+                    config_entry.entry_id,
+                    "Weather Has Direct Sun",
+                    False,
+                    "has_direct_sun",
+                    BinarySensorDeviceClass.LIGHT,
+                    coordinator,
+                )
+                entities.append(has_direct_sun)
 
     async_add_entities(entities)
 

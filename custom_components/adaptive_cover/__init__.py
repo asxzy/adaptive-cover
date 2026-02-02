@@ -41,6 +41,7 @@ ROOM_PLATFORMS = [
     Platform.SELECT,
     Platform.SWITCH,
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
 ]
 
 # Platforms for cover entries that are part of a room
