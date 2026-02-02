@@ -85,10 +85,8 @@ from .const import (
     CONF_MAX_POSITION,
     CONF_MIN_ELEVATION,
     CONF_MIN_POSITION,
-    CONF_OUTSIDE_THRESHOLD,
     CONF_CLOUD_ENTITY,
     CONF_CLOUD_THRESHOLD,
-    CONF_OUTSIDETEMP_ENTITY,
     CONF_PRESENCE_ENTITY,
     CONF_RESET_AT_MIDNIGHT,
     CONF_RETURN_SUNSET,
@@ -170,7 +168,6 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         self._track_end_time = self._get_option(CONF_RETURN_SUNSET)
 
         # Sensor toggles - only used for standalone covers (room manages these otherwise)
-        self._temp_toggle = None
         self._lux_toggle = None
         self._irradiance_toggle = None
         self._cloud_toggle = None
@@ -967,15 +964,12 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
             self._get_option(CONF_PRESENCE_ENTITY),
             self._get_option(CONF_WEATHER_ENTITY),
             self._get_option(CONF_WEATHER_STATE),
-            self._get_option(CONF_OUTSIDETEMP_ENTITY),
-            self.temp_toggle,  # Use property to get from room if available
             self._cover_type,
             self._get_option(CONF_TRANSPARENT_BLIND),
             self._get_option(CONF_LUX_ENTITY),
             self._get_option(CONF_IRRADIANCE_ENTITY),
             self._get_option(CONF_LUX_THRESHOLD),
             self._get_option(CONF_IRRADIANCE_THRESHOLD),
-            self._get_option(CONF_OUTSIDE_THRESHOLD),
             self.lux_toggle,  # Use property to get from room if available
             self.irradiance_toggle,  # Use property to get from room if available
             self._get_option(CONF_CLOUD_ENTITY),
@@ -1106,20 +1100,6 @@ class AdaptiveDataUpdateCoordinator(DataUpdateCoordinator[AdaptiveCoverData]):
         if self._room_coordinator:
             return self._room_coordinator.is_climate_mode
         return self._control_mode == CONTROL_MODE_AUTO
-
-    @property
-    def temp_toggle(self):
-        """Let switch toggle between inside or outside temperature."""
-        if self._room_coordinator:
-            return self._room_coordinator.temp_toggle
-        return self._temp_toggle
-
-    @temp_toggle.setter
-    def temp_toggle(self, value):
-        if self._room_coordinator:
-            self._room_coordinator.temp_toggle = value
-        else:
-            self._temp_toggle = value
 
     @property
     def lux_toggle(self):

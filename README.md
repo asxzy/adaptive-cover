@@ -272,7 +272,6 @@ When climate mode is setup you will also get these entities:
 | Entities                                   | Default | Description                                                                                                 |
 | ------------------------------------------ | ------- | ----------------------------------------------------------------------------------------------------------- |
 | `switch.{type}_climate_mode_{name}`        | `on`    | Enables climate mode strategy; otherwise, defaults to the standard strategy.                                |
-| `switch.{type}_outside_temperature_{name}` | `on`    | Switches between inside and outside temperatures as the basis for determining the climate control strategy. |
 
 ![entities](https://github.com/basbruss/adaptive-cover/blob/main/images/entities.png)
 

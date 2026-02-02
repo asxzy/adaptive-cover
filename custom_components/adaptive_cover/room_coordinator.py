@@ -34,8 +34,6 @@ from .const import (
     CONF_LUX_THRESHOLD,
     CONF_MANUAL_IGNORE_INTERMEDIATE,
     CONF_MANUAL_THRESHOLD,
-    CONF_OUTSIDE_THRESHOLD,
-    CONF_OUTSIDETEMP_ENTITY,
     CONF_PRESENCE_ENTITY,
     CONF_RESET_AT_MIDNIGHT,
     CONF_RETURN_SUNSET,
@@ -70,7 +68,6 @@ class RoomData:
     """Shared room data passed to cover coordinators."""
 
     control_mode: str
-    temp_toggle: bool | None
     lux_toggle: bool | None
     irradiance_toggle: bool | None
     cloud_toggle: bool | None
@@ -78,7 +75,6 @@ class RoomData:
     is_presence: bool | None
     has_direct_sun: bool | None
     # Room-calculated values
-    outside_temperature: float | None = None
     comfort_status: str | None = None
     cloud_coverage: float | None = None
     climate_data_args: list | None = None
@@ -113,7 +109,6 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
         self._midnight_unsub = None
 
         # Sensor toggles (shared across all covers in the room)
-        self._temp_toggle: bool | None = None
         self._lux_toggle: bool | None = None
         self._irradiance_toggle: bool | None = None
         self._cloud_toggle: bool | None = None
@@ -133,12 +128,10 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
             "lux": None,
             "irradiance": None,
             "cloud": None,
-            "outside_temperature": None,
         }
         self._sensor_available: dict[str, bool] = {
             "has_direct_sun": True,
             "is_presence": True,
-            "outside_temperature": True,
         }
         self._store = Store(
             hass,
@@ -237,7 +230,6 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
         await self._update_cloud_value(options)
         await self._update_presence_value(options)
         await self._update_weather_value(options)
-        await self._update_outside_temperature(options)
 
         # Calculate comfort status based on inside temperature
         comfort_status = self._calculate_comfort_status(options)
@@ -247,14 +239,12 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
 
         return RoomData(
             control_mode=self._control_mode,
-            temp_toggle=self._temp_toggle,
             lux_toggle=self._lux_toggle,
             irradiance_toggle=self._irradiance_toggle,
             cloud_toggle=self._cloud_toggle,
             weather_toggle=self._weather_toggle,
             is_presence=self._last_known.get("is_presence"),
             has_direct_sun=self._last_known.get("has_direct_sun"),
-            outside_temperature=self._last_known.get("outside_temperature"),
             comfort_status=comfort_status,
             cloud_coverage=self._last_known.get("cloud"),
             climate_data_args=climate_data_args,
@@ -364,55 +354,6 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
                 self._last_known.get("has_direct_sun"),
             )
 
-    async def _update_outside_temperature(self, options) -> None:
-        """Fetch outside temperature from dedicated entity or weather entity."""
-        outside_temp_entity = options.get(CONF_OUTSIDETEMP_ENTITY)
-        weather_entity = options.get(CONF_WEATHER_ENTITY)
-
-        value = None
-
-        # Try dedicated outside temperature entity first
-        if outside_temp_entity:
-            value = get_safe_state(self.hass, outside_temp_entity)
-            self.logger.debug(
-                "Outside temp entity %s state: %s",
-                outside_temp_entity,
-                value,
-            )
-
-        # Fall back to weather entity temperature attribute
-        if value is None and weather_entity:
-            state = self.hass.states.get(weather_entity)
-            if state and state.attributes:
-                value = state.attributes.get("temperature")
-                self.logger.debug(
-                    "Weather entity %s temperature attribute: %s",
-                    weather_entity,
-                    value,
-                )
-
-        if value is not None:
-            try:
-                temp_value = float(value)
-                if self._last_known.get("outside_temperature") != temp_value:
-                    self._last_known["outside_temperature"] = temp_value
-                    await self._async_save_last_known()
-                    self.logger.debug(
-                        "Updated outside_temperature last_known to: %s", temp_value
-                    )
-                self._sensor_available["outside_temperature"] = True
-            except (ValueError, TypeError) as err:
-                self.logger.warning(
-                    "Invalid outside temperature value '%s': %s", value, err
-                )
-                self._sensor_available["outside_temperature"] = False
-        else:
-            self._sensor_available["outside_temperature"] = False
-            self.logger.debug(
-                "Outside temperature unavailable, keeping last known: %s",
-                self._last_known.get("outside_temperature"),
-            )
-
     def _calculate_comfort_status(self, options) -> str:
         """Calculate comfort status based on inside temperature vs thresholds."""
         temp_entity = options.get(CONF_TEMP_ENTITY)
@@ -460,15 +401,12 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
             options.get(CONF_PRESENCE_ENTITY),
             options.get(CONF_WEATHER_ENTITY),
             options.get(CONF_WEATHER_STATE),
-            options.get(CONF_OUTSIDETEMP_ENTITY),
-            self._temp_toggle,
             None,  # cover_type - will be overridden by cover coordinator
             options.get(CONF_TRANSPARENT_BLIND),
             options.get(CONF_LUX_ENTITY),
             options.get(CONF_IRRADIANCE_ENTITY),
             options.get(CONF_LUX_THRESHOLD),
             options.get(CONF_IRRADIANCE_THRESHOLD),
-            options.get(CONF_OUTSIDE_THRESHOLD),
             self._lux_toggle,
             self._irradiance_toggle,
             options.get(CONF_CLOUD_ENTITY),
@@ -497,13 +435,6 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
         if self.data is not None:
             return self.data.comfort_status
         return COMFORT_STATUS_COMFORTABLE
-
-    @property
-    def outside_temperature(self) -> float | None:
-        """Get outside temperature."""
-        if self.data is not None:
-            return self.data.outside_temperature
-        return None
 
     @property
     def cloud_coverage(self) -> float | None:
@@ -573,15 +504,6 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
         return self._control_mode == CONTROL_MODE_AUTO
 
     # Sensor toggle properties
-    @property
-    def temp_toggle(self) -> bool | None:
-        """Let switch toggle between inside or outside temperature."""
-        return self._temp_toggle
-
-    @temp_toggle.setter
-    def temp_toggle(self, value: bool | None) -> None:
-        self._temp_toggle = value
-
     @property
     def lux_toggle(self) -> bool | None:
         """Toggle lux sensor."""

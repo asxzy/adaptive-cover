@@ -30,9 +30,6 @@
           "off": "mdi:toggle-switch-off-outline"
         }
       },
-      "temp_toggle": {
-        "default": "mdi:thermometer"
-      },
       "switch_mode": {
         "default": "mdi:home-thermometer-outline"
       },

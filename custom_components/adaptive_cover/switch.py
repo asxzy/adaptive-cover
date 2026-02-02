@@ -19,7 +19,6 @@ from .const import (
     CONF_ENTRY_TYPE,
     CONF_IRRADIANCE_ENTITY,
     CONF_LUX_ENTITY,
-    CONF_OUTSIDETEMP_ENTITY,
     CONF_ROOM_ID,
     CONF_WEATHER_ENTITY,
     CONTROL_MODE_AUTO,
@@ -52,16 +51,6 @@ async def async_setup_entry(
         return
 
     # Sensor toggle switches (only functional in AUTO mode)
-    temp_switch = AdaptiveCoverSwitch(
-        config_entry,
-        config_entry.entry_id,
-        "Outside Temperature",
-        False,
-        "temp_toggle",
-        coordinator,
-        is_room=is_room,
-        room_id=room_id,
-    )
     lux_switch = AdaptiveCoverSwitch(
         config_entry,
         config_entry.entry_id,
@@ -108,7 +97,6 @@ async def async_setup_entry(
         True if is_room else config_entry.options.get(CONF_CLIMATE_MODE, False)
     )
     weather_entity = config_entry.options.get(CONF_WEATHER_ENTITY)
-    sensor_entity = config_entry.options.get(CONF_OUTSIDETEMP_ENTITY)
     lux_entity = config_entry.options.get(CONF_LUX_ENTITY)
     irradiance_entity = config_entry.options.get(CONF_IRRADIANCE_ENTITY)
     cloud_entity = config_entry.options.get(CONF_CLOUD_ENTITY)
@@ -116,12 +104,11 @@ async def async_setup_entry(
 
     _LOGGER.debug(
         "Switch setup for %s: climate_mode=%s, weather_entity=%s, "
-        "sensor_entity=%s, lux_entity=%s, irradiance_entity=%s, cloud_entity=%s, "
+        "lux_entity=%s, irradiance_entity=%s, cloud_entity=%s, "
         "control_mode=%s",
         config_entry.data.get("name"),
         climate_mode,
         weather_entity,
-        sensor_entity,
         lux_entity,
         irradiance_entity,
         cloud_entity,
@@ -131,8 +118,6 @@ async def async_setup_entry(
     # Sensor toggles are shown if climate mode is enabled in config
     # They only affect behavior when control mode is AUTO
     if climate_mode:
-        if weather_entity or sensor_entity:
-            switches.append(temp_switch)
         if lux_entity:
             switches.append(lux_switch)
         if irradiance_entity:

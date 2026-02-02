@@ -290,15 +290,12 @@ class TestClimateCoverData:
             "presence_entity": None,
             "weather_entity": None,
             "weather_condition": [],
-            "outside_entity": None,
-            "temp_switch": False,
             "blind_type": "cover_blind",
             "transparent_blind": False,
             "lux_entity": None,
             "irradiance_entity": None,
             "lux_threshold": None,
             "irradiance_threshold": None,
-            "temp_summer_outside": None,
             "_use_lux": False,
             "_use_irradiance": False,
             "cloud_entity": None,
@@ -321,15 +318,12 @@ class TestClimateCoverData:
             presence_entity=None,
             weather_entity=None,
             weather_condition=[],
-            outside_entity=None,
-            temp_switch=False,
             blind_type="cover_blind",
             transparent_blind=False,
             lux_entity=None,
             irradiance_entity=None,
             lux_threshold=None,
             irradiance_threshold=None,
-            temp_summer_outside=None,
             _use_lux=False,
             _use_irradiance=False,
             cloud_entity=None,
@@ -356,15 +350,12 @@ class TestClimateCoverData:
             presence_entity="binary_sensor.presence",
             weather_entity=None,
             weather_condition=[],
-            outside_entity=None,
-            temp_switch=False,
             blind_type="cover_blind",
             transparent_blind=False,
             lux_entity=None,
             irradiance_entity=None,
             lux_threshold=None,
             irradiance_threshold=None,
-            temp_summer_outside=None,
             _use_lux=False,
             _use_irradiance=False,
             cloud_entity=None,
@@ -391,15 +382,12 @@ class TestClimateCoverData:
             presence_entity="binary_sensor.presence",
             weather_entity=None,
             weather_condition=[],
-            outside_entity=None,
-            temp_switch=False,
             blind_type="cover_blind",
             transparent_blind=False,
             lux_entity=None,
             irradiance_entity=None,
             lux_threshold=None,
             irradiance_threshold=None,
-            temp_summer_outside=None,
             _use_lux=False,
             _use_irradiance=False,
             cloud_entity=None,
@@ -426,15 +414,12 @@ class TestClimateCoverData:
             presence_entity="device_tracker.phone",
             weather_entity=None,
             weather_condition=[],
-            outside_entity=None,
-            temp_switch=False,
             blind_type="cover_blind",
             transparent_blind=False,
             lux_entity=None,
             irradiance_entity=None,
             lux_threshold=None,
             irradiance_threshold=None,
-            temp_summer_outside=None,
             _use_lux=False,
             _use_irradiance=False,
             cloud_entity=None,
@@ -461,15 +446,12 @@ class TestClimateCoverData:
             presence_entity=None,
             weather_entity=None,
             weather_condition=[],
-            outside_entity=None,
-            temp_switch=False,
             blind_type="cover_blind",
             transparent_blind=False,
             lux_entity=None,
             irradiance_entity=None,
             lux_threshold=None,
             irradiance_threshold=None,
-            temp_summer_outside=None,
             _use_lux=False,
             _use_irradiance=False,
             cloud_entity=None,
@@ -496,15 +478,12 @@ class TestClimateCoverData:
             presence_entity=None,
             weather_entity=None,
             weather_condition=[],
-            outside_entity=None,
-            temp_switch=False,
             blind_type="cover_blind",
             transparent_blind=False,
             lux_entity=None,
             irradiance_entity=None,
             lux_threshold=None,
             irradiance_threshold=None,
-            temp_summer_outside=None,
             _use_lux=False,
             _use_irradiance=False,
             cloud_entity=None,
@@ -527,15 +506,12 @@ class TestClimateCoverData:
             presence_entity=None,
             weather_entity=None,
             weather_condition=[],
-            outside_entity=None,
-            temp_switch=False,
             blind_type="cover_blind",
             transparent_blind=False,
             lux_entity=None,
             irradiance_entity=None,
             lux_threshold=None,
             irradiance_threshold=None,
-            temp_summer_outside=None,
             _use_lux=False,
             _use_irradiance=False,
             cloud_entity=None,
@@ -562,15 +538,12 @@ class TestClimateCoverData:
             presence_entity=None,
             weather_entity="weather.home",
             weather_condition=["sunny", "partlycloudy"],
-            outside_entity=None,
-            temp_switch=False,
             blind_type="cover_blind",
             transparent_blind=False,
             lux_entity=None,
             irradiance_entity=None,
             lux_threshold=None,
             irradiance_threshold=None,
-            temp_summer_outside=None,
             _use_lux=False,
             _use_irradiance=False,
             cloud_entity=None,
@@ -597,15 +570,12 @@ class TestClimateCoverData:
             presence_entity=None,
             weather_entity="weather.home",
             weather_condition=["sunny", "partlycloudy"],
-            outside_entity=None,
-            temp_switch=False,
             blind_type="cover_blind",
             transparent_blind=False,
             lux_entity=None,
             irradiance_entity=None,
             lux_threshold=None,
             irradiance_threshold=None,
-            temp_summer_outside=None,
             _use_lux=False,
             _use_irradiance=False,
             cloud_entity=None,
@@ -632,15 +602,12 @@ class TestClimateCoverData:
             presence_entity=None,
             weather_entity=None,
             weather_condition=[],
-            outside_entity=None,
-            temp_switch=False,
             blind_type="cover_blind",
             transparent_blind=False,
             lux_entity="sensor.lux",
             irradiance_entity=None,
             lux_threshold=1000,
             irradiance_threshold=None,
-            temp_summer_outside=None,
             _use_lux=True,
             _use_irradiance=False,
             cloud_entity=None,
@@ -667,15 +634,12 @@ class TestClimateCoverData:
             presence_entity=None,
             weather_entity=None,
             weather_condition=[],
-            outside_entity=None,
-            temp_switch=False,
             blind_type="cover_blind",
             transparent_blind=False,
             lux_entity=None,
             irradiance_entity=None,
             lux_threshold=None,
             irradiance_threshold=None,
-            temp_summer_outside=None,
             _use_lux=False,
             _use_irradiance=False,
             cloud_entity="sensor.cloud_coverage",
@@ -723,46 +687,6 @@ class TestClimateCoverData:
 
         # 200 < 400 so returns True (no actual sun)
         assert climate_data.irradiance is True
-
-    def test_is_winter_with_outside_temp(
-        self, mock_hass: MagicMock, mock_logger: ConfigContextAdapter
-    ) -> None:
-        """Test is_winter checks outside temp when temp_switch is True."""
-        mock_state = MagicMock()
-        mock_state.state = "5.0"  # Cold outside
-        mock_hass.states.get.return_value = mock_state
-
-        climate_data = self._create_climate_data(
-            mock_hass,
-            mock_logger,
-            temp_entity="sensor.inside_temp",
-            outside_entity="sensor.outside_temp",
-            temp_switch=True,  # Use outside temp
-            temp_low=18.0,
-        )
-
-        # 5.0 < 18.0 so is_winter should be True
-        assert climate_data.is_winter is True
-
-    def test_is_summer_with_outside_temp(
-        self, mock_hass: MagicMock, mock_logger: ConfigContextAdapter
-    ) -> None:
-        """Test is_summer checks outside temp when temp_switch is True."""
-        mock_state = MagicMock()
-        mock_state.state = "30.0"  # Hot outside
-        mock_hass.states.get.return_value = mock_state
-
-        climate_data = self._create_climate_data(
-            mock_hass,
-            mock_logger,
-            temp_entity="sensor.inside_temp",
-            outside_entity="sensor.outside_temp",
-            temp_switch=True,  # Use outside temp
-            temp_high=24.0,
-        )
-
-        # 30.0 > 24.0 so is_summer should be True
-        assert climate_data.is_summer is True
 
     def test_lux_no_entity(
         self, mock_hass: MagicMock, mock_logger: ConfigContextAdapter

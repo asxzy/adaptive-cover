@@ -25,7 +25,6 @@ class TestRoomData:
         """Test RoomData can be created with all fields."""
         data = RoomData(
             control_mode=CONTROL_MODE_AUTO,
-            temp_toggle=True,
             lux_toggle=False,
             irradiance_toggle=None,
             cloud_toggle=True,
@@ -35,7 +34,6 @@ class TestRoomData:
         )
 
         assert data.control_mode == CONTROL_MODE_AUTO
-        assert data.temp_toggle is True
         assert data.lux_toggle is False
         assert data.irradiance_toggle is None
         assert data.cloud_toggle is True
@@ -51,7 +49,6 @@ class TestRoomData:
         climate_args = ["hass", "logger", "sensor.temp"]
         data = RoomData(
             control_mode=CONTROL_MODE_AUTO,
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -68,7 +65,6 @@ class TestRoomData:
         sensor_available = {"is_presence": True, "has_direct_sun": False}
         data = RoomData(
             control_mode=CONTROL_MODE_FORCE,
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -85,7 +81,6 @@ class TestRoomData:
         last_known = {"is_presence": True, "cloud": 50.0}
         data = RoomData(
             control_mode=CONTROL_MODE_DISABLED,
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -181,16 +176,6 @@ class TestRoomCoordinatorProperties:
     def test_delta_time(self, room_coordinator: RoomCoordinator) -> None:
         """Test delta_time property."""
         assert room_coordinator.delta_time == 3
-
-    def test_temp_toggle(self, room_coordinator: RoomCoordinator) -> None:
-        """Test temp_toggle property."""
-        assert room_coordinator.temp_toggle is None
-
-        room_coordinator.temp_toggle = True
-        assert room_coordinator.temp_toggle is True
-
-        room_coordinator.temp_toggle = False
-        assert room_coordinator.temp_toggle is False
 
     def test_lux_toggle(self, room_coordinator: RoomCoordinator) -> None:
         """Test lux_toggle property."""
@@ -297,13 +282,6 @@ class TestRoomCoordinatorCoverManagement:
         from custom_components.adaptive_cover.const import COMFORT_STATUS_COMFORTABLE
 
         assert room_coordinator.comfort_status == COMFORT_STATUS_COMFORTABLE
-
-    def test_outside_temperature_from_data(
-        self, room_coordinator: RoomCoordinator
-    ) -> None:
-        """Test outside_temperature returns value from coordinator data."""
-        # Initially data is None, so outside_temperature should be None
-        assert room_coordinator.outside_temperature is None
 
     def test_cloud_coverage_from_data(self, room_coordinator: RoomCoordinator) -> None:
         """Test cloud_coverage returns value from coordinator data."""
@@ -478,13 +456,6 @@ class TestRoomCoordinatorWithNoCoverData:
         # Without temperature data, it defaults to "comfortable"
         assert room_coordinator.comfort_status == COMFORT_STATUS_COMFORTABLE
 
-    def test_outside_temperature_from_room_data(
-        self, room_coordinator: RoomCoordinator
-    ) -> None:
-        """Test outside_temperature is from room data."""
-        # Without coordinator data, outside_temperature should be None
-        assert room_coordinator.outside_temperature is None
-
     def test_cloud_coverage_from_room_data(
         self, room_coordinator: RoomCoordinator
     ) -> None:
@@ -609,7 +580,6 @@ class TestRoomCoordinatorAsync:
         # Set up data so refresh works
         room_coordinator.data = RoomData(
             control_mode=CONTROL_MODE_AUTO,
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,

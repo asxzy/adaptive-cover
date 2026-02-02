@@ -283,15 +283,12 @@ class ClimateCoverData:
     presence_entity: str
     weather_entity: str
     weather_condition: list[str]
-    outside_entity: str
-    temp_switch: bool
     blind_type: str
     transparent_blind: bool
     lux_entity: str
     irradiance_entity: str
     lux_threshold: int
     irradiance_threshold: int
-    temp_summer_outside: float
     _use_lux: bool
     _use_irradiance: bool
     cloud_entity: str
@@ -308,19 +305,6 @@ class ClimateCoverData:
     _cloud_override: bool | None = None
 
     @property
-    def outside_temperature(self):
-        """Get outside temperature."""
-        temp = None
-        if self.outside_entity:
-            temp = get_safe_state(
-                self.hass,
-                self.outside_entity,
-            )
-        elif self.weather_entity:
-            temp = state_attr(self.hass, self.weather_entity, "temperature")
-        return temp
-
-    @property
     def inside_temperature(self):
         """Get inside temp from entity."""
         if self.temp_entity is not None:
@@ -335,10 +319,7 @@ class ClimateCoverData:
 
     @property
     def get_current_temperature(self) -> float:
-        """Get temperature."""
-        if self.temp_switch:
-            if self.outside_temperature:
-                return float(self.outside_temperature)
+        """Get inside temperature for climate decisions."""
         if self.inside_temperature:
             return float(self.inside_temperature)
 
@@ -398,28 +379,17 @@ class ClimateCoverData:
         return is_it
 
     @property
-    def outside_high(self) -> bool:
-        """Check if outdoor temperature is above threshold."""
-        if (
-            self.temp_summer_outside is not None
-            and self.outside_temperature is not None
-        ):
-            return float(self.outside_temperature) > self.temp_summer_outside
-        return True
-
-    @property
     def is_summer(self) -> bool:
-        """Check if temperature is over threshold."""
+        """Check if inside temperature is over high threshold (room is too hot)."""
         if self.temp_high is not None and self.get_current_temperature is not None:
-            is_it = self.get_current_temperature > self.temp_high and self.outside_high
+            is_it = self.get_current_temperature > self.temp_high
         else:
             is_it = False
 
         self.logger.debug(
-            "is_summer(): current_temp > temp_high and outside_high?: %s > %s and %s = %s",
+            "is_summer(): current_temp > temp_high: %s > %s = %s",
             self.get_current_temperature,
             self.temp_high,
-            self.outside_high,
             is_it,
         )
         return is_it

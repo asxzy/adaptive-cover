@@ -69,7 +69,6 @@ from .const import (
     CONF_MAX_POSITION,
     CONF_MIN_ELEVATION,
     CONF_MODE,
-    CONF_OUTSIDETEMP_ENTITY,
     CONF_PRESENCE_ENTITY,
     CONF_RETURN_SUNSET,
     CONF_ROOM_ID,
@@ -89,7 +88,6 @@ from .const import (
     CONF_TRANSPARENT_BLIND,
     CONF_WEATHER_ENTITY,
     CONF_WEATHER_STATE,
-    CONF_OUTSIDE_THRESHOLD,
     CONF_CLOUD_ENTITY,
     CONF_CLOUD_THRESHOLD,
     DOMAIN,
@@ -268,14 +266,6 @@ CLIMATE_OPTIONS = vol.Schema(
             selector.NumberSelectorConfig(
                 min=0, max=90, step=1, mode="slider", unit_of_measurement="°"
             )
-        ),
-        vol.Optional(
-            CONF_OUTSIDETEMP_ENTITY, default=vol.UNDEFINED
-        ): selector.EntitySelector(
-            selector.EntityFilterSelectorConfig(domain=["sensor"])
-        ),
-        vol.Optional(CONF_OUTSIDE_THRESHOLD, default=0): vol.All(
-            vol.Coerce(int), vol.Range(min=0, max=100)
         ),
         vol.Optional(
             CONF_PRESENCE_ENTITY, default=vol.UNDEFINED
@@ -475,7 +465,6 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
         """Configure room climate sensors."""
         if user_input is not None:
             entities = [
-                CONF_OUTSIDETEMP_ENTITY,
                 CONF_WEATHER_ENTITY,
                 CONF_PRESENCE_ENTITY,
                 CONF_LUX_ENTITY,
@@ -531,8 +520,6 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
                 CONF_TEMP_ENTITY: self.config.get(CONF_TEMP_ENTITY),
                 CONF_TEMP_LOW: self.config.get(CONF_TEMP_LOW),
                 CONF_TEMP_HIGH: self.config.get(CONF_TEMP_HIGH),
-                CONF_OUTSIDETEMP_ENTITY: self.config.get(CONF_OUTSIDETEMP_ENTITY),
-                CONF_OUTSIDE_THRESHOLD: self.config.get(CONF_OUTSIDE_THRESHOLD),
                 CONF_PRESENCE_ENTITY: self.config.get(CONF_PRESENCE_ENTITY),
                 CONF_LUX_ENTITY: self.config.get(CONF_LUX_ENTITY),
                 CONF_LUX_THRESHOLD: self.config.get(CONF_LUX_THRESHOLD),
@@ -843,7 +830,6 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
                     CONF_WEATHER_ENTITY: self.config.get(CONF_WEATHER_ENTITY),
                     CONF_TEMP_LOW: self.config.get(CONF_TEMP_LOW),
                     CONF_TEMP_HIGH: self.config.get(CONF_TEMP_HIGH),
-                    CONF_OUTSIDETEMP_ENTITY: self.config.get(CONF_OUTSIDETEMP_ENTITY),
                     CONF_CLIMATE_MODE: self.config.get(CONF_CLIMATE_MODE),
                     CONF_WEATHER_STATE: self.config.get(CONF_WEATHER_STATE),
                     CONF_DELTA_POSITION: self.config.get(CONF_DELTA_POSITION),
@@ -869,7 +855,6 @@ class ConfigFlowHandler(ConfigFlow, domain=DOMAIN):
                     CONF_IRRADIANCE_THRESHOLD: self.config.get(
                         CONF_IRRADIANCE_THRESHOLD
                     ),
-                    CONF_OUTSIDE_THRESHOLD: self.config.get(CONF_OUTSIDE_THRESHOLD),
                     CONF_CLOUD_ENTITY: self.config.get(CONF_CLOUD_ENTITY),
                     CONF_CLOUD_THRESHOLD: self.config.get(CONF_CLOUD_THRESHOLD),
                 }
@@ -1049,7 +1034,6 @@ class OptionsFlowHandler(OptionsFlow):
                 CONF_WEATHER_ENTITY,
                 CONF_TEMP_LOW,
                 CONF_TEMP_HIGH,
-                CONF_OUTSIDETEMP_ENTITY,
                 CONF_CLIMATE_MODE,
                 CONF_WEATHER_STATE,
                 CONF_DELTA_POSITION,
@@ -1067,7 +1051,6 @@ class OptionsFlowHandler(OptionsFlow):
                 CONF_LUX_THRESHOLD,
                 CONF_IRRADIANCE_ENTITY,
                 CONF_IRRADIANCE_THRESHOLD,
-                CONF_OUTSIDE_THRESHOLD,
                 CONF_CLOUD_ENTITY,
                 CONF_CLOUD_THRESHOLD,
             ]
@@ -1114,7 +1097,6 @@ class OptionsFlowHandler(OptionsFlow):
         """Manage room climate options."""
         if user_input is not None:
             entities = [
-                CONF_OUTSIDETEMP_ENTITY,
                 CONF_WEATHER_ENTITY,
                 CONF_PRESENCE_ENTITY,
                 CONF_LUX_ENTITY,
@@ -1339,7 +1321,6 @@ class OptionsFlowHandler(OptionsFlow):
         """Manage climate options."""
         if user_input is not None:
             entities = [
-                CONF_OUTSIDETEMP_ENTITY,
                 CONF_WEATHER_ENTITY,
                 CONF_PRESENCE_ENTITY,
                 CONF_LUX_ENTITY,

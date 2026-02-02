@@ -50,7 +50,6 @@ CONF_MAX_POSITION = "max_position"
 CONF_MIN_POSITION = "min_position"
 CONF_ENABLE_MAX_POSITION = "enable_max_position"
 CONF_ENABLE_MIN_POSITION = "enable_min_position"
-CONF_OUTSIDETEMP_ENTITY = "outside_temp"
 CONF_ENABLE_BLIND_SPOT = "blind_spot"
 CONF_BLIND_SPOT_RIGHT = "blind_spot_right"
 CONF_BLIND_SPOT_LEFT = "blind_spot_left"
@@ -67,7 +66,6 @@ CONF_LUX_ENTITY = "lux_entity"
 CONF_LUX_THRESHOLD = "lux_threshold"
 CONF_IRRADIANCE_ENTITY = "irradiance_entity"
 CONF_IRRADIANCE_THRESHOLD = "irradiance_threshold"
-CONF_OUTSIDE_THRESHOLD = "outside_threshold"
 CONF_CLOUD_ENTITY = "cloud_entity"
 CONF_CLOUD_THRESHOLD = "cloud_threshold"
 
@@ -130,13 +128,11 @@ ROOM_SHARED_OPTIONS = [
     CONF_LUX_ENTITY,
     CONF_IRRADIANCE_ENTITY,
     CONF_CLOUD_ENTITY,
-    CONF_OUTSIDETEMP_ENTITY,
     # Climate thresholds
     CONF_TEMP_LOW,
     CONF_TEMP_HIGH,
     CONF_LUX_THRESHOLD,
     CONF_IRRADIANCE_THRESHOLD,
-    CONF_OUTSIDE_THRESHOLD,
     CONF_CLOUD_THRESHOLD,
     CONF_WEATHER_STATE,
     CONF_TRANSPARENT_BLIND,

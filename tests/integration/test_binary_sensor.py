@@ -53,7 +53,6 @@ class TestAdaptiveCoverBinarySensor:
         coordinator = MagicMock(spec=RoomCoordinator)
         coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -403,7 +402,6 @@ class TestBinarySensorAsyncSetupEntry:
         coordinator = MagicMock(spec=RoomCoordinator)
         coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -563,7 +561,6 @@ class TestBinarySensorAvailabilityEdgeCases:
         coordinator = MagicMock(spec=RoomCoordinator)
         coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -644,7 +641,6 @@ class TestBinarySensorAvailabilityEdgeCases:
         # Sensor unavailable but has last known value
         mock_room_coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -747,7 +743,6 @@ class TestBinarySensorExtraAttributesEdgeCases:
         coordinator = MagicMock(spec=RoomCoordinator)
         coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,

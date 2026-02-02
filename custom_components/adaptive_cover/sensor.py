@@ -24,10 +24,8 @@ from .const import (
     _LOGGER,
     CONF_CLOUD_ENTITY,
     CONF_ENTRY_TYPE,
-    CONF_OUTSIDETEMP_ENTITY,
     CONF_ROOM_ID,
     CONF_TEMP_ENTITY,
-    CONF_WEATHER_ENTITY,
     CONTROL_MODE_DISABLED,
     DOMAIN,
     EntryType,
@@ -55,16 +53,6 @@ def _cleanup_orphaned_sensors(
     if not config_entry.options.get(CONF_CLOUD_ENTITY):
         entity_id = ent_reg.async_get_entity_id(
             "sensor", DOMAIN, f"{entry_id}_Cloud Coverage"
-        )
-        if entity_id:
-            ent_reg.async_remove(entity_id)
-
-    # Remove outside temp sensor if neither outside temp nor weather configured
-    if not config_entry.options.get(
-        CONF_OUTSIDETEMP_ENTITY
-    ) and not config_entry.options.get(CONF_WEATHER_ENTITY):
-        entity_id = ent_reg.async_get_entity_id(
-            "sensor", DOMAIN, f"{entry_id}_Outside Temperature"
         )
         if entity_id:
             ent_reg.async_remove(entity_id)
@@ -160,51 +148,6 @@ class CoverRoomCloudProxySensor(ProxySensorEntity):
         if self._source_coordinator.data is None:
             return False
         return self._source_coordinator.data.cloud_coverage is not None
-
-
-class CoverRoomTempProxySensor(ProxySensorEntity):
-    """Proxy sensor showing room's outside temperature on cover device."""
-
-    _attr_device_class = SensorDeviceClass.TEMPERATURE
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_icon = "mdi:thermometer"
-
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        room_coordinator: RoomCoordinator,
-        cover_entry_id: str,
-        cover_name: str,
-        room_id: str,
-    ) -> None:
-        """Initialize the proxy sensor."""
-        device_info = DeviceInfo(
-            entry_type=DeviceEntryType.SERVICE,
-            identifiers={(DOMAIN, cover_entry_id)},
-            name=cover_name,
-            via_device=(DOMAIN, f"room_{room_id}"),
-        )
-        super().__init__(
-            source_coordinator=room_coordinator,
-            device_info=device_info,
-            unique_id=f"{cover_entry_id}_room_proxy_temp",
-            name="Outside Temperature (Room)",
-        )
-        self._attr_native_unit_of_measurement = hass.config.units.temperature_unit
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the outside temperature from room."""
-        if self._source_coordinator.data is None:
-            return None
-        return self._source_coordinator.data.outside_temperature
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        if self._source_coordinator.data is None:
-            return False
-        return self._source_coordinator.data.outside_temperature is not None
 
 
 class CoverRoomComfortProxySensor(ProxySensorEntity):
@@ -326,19 +269,6 @@ async def async_setup_entry(
             )
             entities.append(cloud_sensor)
 
-        # Outside temperature sensor for room (if outside temp or weather entity configured)
-        outside_temp_entity = config_entry.options.get(CONF_OUTSIDETEMP_ENTITY)
-        weather_entity = config_entry.options.get(CONF_WEATHER_ENTITY)
-        if outside_temp_entity or weather_entity:
-            outside_temp = AdaptiveRoomOutsideTempSensorEntity(
-                config_entry.entry_id,
-                hass,
-                config_entry,
-                name,
-                coordinator,
-            )
-            entities.append(outside_temp)
-
         # Comfort Status sensor for room (if temp entity configured)
         temp_entity = config_entry.options.get(CONF_TEMP_ENTITY)
         if temp_entity:
@@ -434,19 +364,6 @@ async def async_setup_entry(
                         room_id,
                     )
                     entities.append(cloud_proxy)
-
-                # Outside temperature proxy (only if room has outside temp or weather)
-                outside_temp_entity = room_options.get(CONF_OUTSIDETEMP_ENTITY)
-                weather_entity = room_options.get(CONF_WEATHER_ENTITY)
-                if outside_temp_entity or weather_entity:
-                    temp_proxy = CoverRoomTempProxySensor(
-                        hass,
-                        room_coordinator,
-                        config_entry.entry_id,
-                        name,
-                        room_id,
-                    )
-                    entities.append(temp_proxy)
 
                 # Comfort status proxy (only if room has temp entity configured)
                 if room_options.get(CONF_TEMP_ENTITY):
@@ -625,65 +542,6 @@ class AdaptiveCoverTimeSensorEntity(
         if self._room_id:
             info["via_device"] = (DOMAIN, f"room_{self._room_id}")
         return info
-
-
-class AdaptiveRoomOutsideTempSensorEntity(
-    CoordinatorEntity[RoomCoordinator], SensorEntity
-):
-    """Adaptive Cover Room Outside Temperature Sensor."""
-
-    _attr_device_class = SensorDeviceClass.TEMPERATURE
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_has_entity_name = True
-    _attr_should_poll = False
-
-    def __init__(
-        self,
-        unique_id: str,
-        hass,
-        config_entry,
-        name: str,
-        coordinator: RoomCoordinator,
-    ) -> None:
-        """Initialize adaptive_cover Room Outside Temperature Sensor."""
-        super().__init__(coordinator=coordinator)
-        self._attr_icon = "mdi:thermometer"
-        self.coordinator = coordinator
-        self._attr_unique_id = f"{unique_id}_Outside Temperature"
-        self._device_id = unique_id
-        self.hass = hass
-        self.config_entry = config_entry
-        self._name = name
-        self._attr_name = "Outside Temperature"
-        self._attr_native_unit_of_measurement = hass.config.units.temperature_unit
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.async_write_ha_state()
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the outside temperature value from room coordinator."""
-        return self.coordinator.outside_temperature
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        if not super().available:
-            return False
-        if self.coordinator.data is None:
-            return False
-        return self.coordinator.outside_temperature is not None
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info."""
-        return DeviceInfo(
-            entry_type=DeviceEntryType.SERVICE,
-            identifiers={(DOMAIN, f"room_{self._device_id}")},
-            name=f"Room: {self._name}",
-        )
 
 
 class AdaptiveCoverControlSensorEntity(

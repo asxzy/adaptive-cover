@@ -17,7 +17,6 @@ from custom_components.adaptive_cover.binary_sensor import (
 from custom_components.adaptive_cover.const import (
     CONF_CLOUD_ENTITY,
     CONF_ENTRY_TYPE,
-    CONF_OUTSIDETEMP_ENTITY,
     CONF_PRESENCE_ENTITY,
     CONF_ROOM_ID,
     CONF_TEMP_ENTITY,
@@ -31,7 +30,6 @@ from custom_components.adaptive_cover.room_coordinator import RoomData
 from custom_components.adaptive_cover.sensor import (
     CoverRoomCloudProxySensor,
     CoverRoomComfortProxySensor,
-    CoverRoomTempProxySensor,
     ProxySensorEntity,
     RoomCoverPositionProxySensor,
 )
@@ -214,7 +212,6 @@ class TestCoverRoomCloudProxySensor:
         coordinator = MagicMock(spec=RoomCoordinator)
         coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -222,7 +219,6 @@ class TestCoverRoomCloudProxySensor:
             is_presence=True,
             has_direct_sun=True,
             cloud_coverage=45.0,
-            outside_temperature=22.5,
             comfort_status="comfortable",
             sensor_available={},
             last_known={},
@@ -283,7 +279,6 @@ class TestCoverRoomCloudProxySensor:
         """Test available returns False when no cloud data."""
         mock_room_coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -291,7 +286,6 @@ class TestCoverRoomCloudProxySensor:
             is_presence=True,
             has_direct_sun=True,
             cloud_coverage=None,  # No cloud data
-            outside_temperature=22.5,
             comfort_status="comfortable",
             sensor_available={},
             last_known={},
@@ -307,81 +301,6 @@ class TestCoverRoomCloudProxySensor:
         assert sensor.available is False
 
 
-class TestCoverRoomTempProxySensor:
-    """Tests for CoverRoomTempProxySensor."""
-
-    @pytest.fixture
-    def mock_room_coordinator(self) -> MagicMock:
-        """Create mock RoomCoordinator."""
-        from custom_components.adaptive_cover.room_coordinator import RoomCoordinator
-
-        coordinator = MagicMock(spec=RoomCoordinator)
-        coordinator.data = RoomData(
-            control_mode="auto",
-            temp_toggle=None,
-            lux_toggle=None,
-            irradiance_toggle=None,
-            cloud_toggle=None,
-            weather_toggle=None,
-            is_presence=True,
-            has_direct_sun=True,
-            cloud_coverage=45.0,
-            outside_temperature=22.5,
-            comfort_status="comfortable",
-            sensor_available={},
-            last_known={},
-        )
-        coordinator.async_add_listener = MagicMock(return_value=MagicMock())
-        return coordinator
-
-    def test_init(self, hass: HomeAssistant, mock_room_coordinator: MagicMock) -> None:
-        """Test CoverRoomTempProxySensor initialization."""
-        sensor = CoverRoomTempProxySensor(
-            hass=hass,
-            room_coordinator=mock_room_coordinator,
-            cover_entry_id="cover_123",
-            cover_name="Living Room Blinds",
-            room_id="room_456",
-        )
-
-        assert sensor._attr_unique_id == "cover_123_room_proxy_temp"
-        assert sensor._attr_name == "Outside Temperature (Room)"
-        assert (
-            sensor._attr_native_unit_of_measurement
-            == hass.config.units.temperature_unit
-        )
-
-    def test_native_value(
-        self, hass: HomeAssistant, mock_room_coordinator: MagicMock
-    ) -> None:
-        """Test native_value returns outside temperature from room."""
-        sensor = CoverRoomTempProxySensor(
-            hass=hass,
-            room_coordinator=mock_room_coordinator,
-            cover_entry_id="cover_123",
-            cover_name="Blinds",
-            room_id="room_456",
-        )
-
-        assert sensor.native_value == 22.5
-
-    def test_native_value_no_data(
-        self, hass: HomeAssistant, mock_room_coordinator: MagicMock
-    ) -> None:
-        """Test native_value returns None when no data."""
-        mock_room_coordinator.data = None
-
-        sensor = CoverRoomTempProxySensor(
-            hass=hass,
-            room_coordinator=mock_room_coordinator,
-            cover_entry_id="cover_123",
-            cover_name="Blinds",
-            room_id="room_456",
-        )
-
-        assert sensor.native_value is None
-
-
 class TestCoverRoomComfortProxySensor:
     """Tests for CoverRoomComfortProxySensor."""
 
@@ -394,7 +313,6 @@ class TestCoverRoomComfortProxySensor:
         coordinator.comfort_status = "too_hot"
         coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -402,7 +320,6 @@ class TestCoverRoomComfortProxySensor:
             is_presence=True,
             has_direct_sun=True,
             cloud_coverage=45.0,
-            outside_temperature=22.5,
             comfort_status="too_hot",
             sensor_available={},
             last_known={},
@@ -469,7 +386,6 @@ class TestCoverRoomOccupiedProxySensor:
         coordinator = MagicMock(spec=RoomCoordinator)
         coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -561,7 +477,6 @@ class TestCoverRoomDirectSunProxySensor:
         coordinator = MagicMock(spec=RoomCoordinator)
         coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -867,7 +782,6 @@ class TestSensorAsyncSetupEntryProxySensors:
         coordinator = MagicMock(spec=RoomCoordinator)
         coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -875,13 +789,11 @@ class TestSensorAsyncSetupEntryProxySensors:
             is_presence=True,
             has_direct_sun=True,
             cloud_coverage=45.0,
-            outside_temperature=22.5,
             comfort_status="comfortable",
             sensor_available={},
             last_known={},
         )
         coordinator.comfort_status = "comfortable"
-        coordinator.outside_temperature = 22.5
         coordinator._child_coordinators = []
         coordinator.last_update_success = True
         coordinator.async_add_listener = MagicMock(return_value=MagicMock())
@@ -926,7 +838,6 @@ class TestSensorAsyncSetupEntryProxySensors:
         entry.data = {"name": "Test Room", CONF_ENTRY_TYPE: EntryType.ROOM}
         entry.options = {
             CONF_CLOUD_ENTITY: "sensor.cloud",
-            CONF_OUTSIDETEMP_ENTITY: "sensor.outside_temp",
             CONF_TEMP_ENTITY: "sensor.inside_temp",
         }
         entry.async_on_unload = MagicMock()
@@ -957,10 +868,9 @@ class TestSensorAsyncSetupEntryProxySensors:
 
         await async_setup_entry(hass, mock_cover_in_room_config_entry, add_entities)
 
-        # Cover in room should get: position, start, end + cloud proxy, temp proxy, comfort proxy
+        # Cover in room should get: position, start, end + cloud proxy, comfort proxy
         entity_types = [type(e).__name__ for e in entities_added]
         assert "CoverRoomCloudProxySensor" in entity_types
-        assert "CoverRoomTempProxySensor" in entity_types
         assert "CoverRoomComfortProxySensor" in entity_types
 
     @pytest.mark.asyncio
@@ -1012,7 +922,6 @@ class TestBinarySensorAsyncSetupEntryProxySensors:
         coordinator = MagicMock(spec=RoomCoordinator)
         coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -1149,7 +1058,6 @@ class TestDynamicProxySensorCreation:
         coordinator = MagicMock(spec=RoomCoordinator)
         coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -1165,7 +1073,6 @@ class TestDynamicProxySensorCreation:
         coordinator._child_coordinators = []
         coordinator.last_update_success = True
         coordinator.comfort_status = "comfortable"
-        coordinator.outside_temperature = 22.5
         coordinator.async_add_listener = MagicMock(return_value=MagicMock())
         return coordinator
 

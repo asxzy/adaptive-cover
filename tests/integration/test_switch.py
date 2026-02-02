@@ -16,7 +16,6 @@ from custom_components.adaptive_cover.const import (
     CONF_ENTRY_TYPE,
     CONF_IRRADIANCE_ENTITY,
     CONF_LUX_ENTITY,
-    CONF_OUTSIDETEMP_ENTITY,
     CONF_ROOM_ID,
     CONF_WEATHER_ENTITY,
     CONTROL_MODE_AUTO,
@@ -41,7 +40,6 @@ class TestAdaptiveCoverSwitch:
         coordinator.logger = MagicMock()
         coordinator.control_mode = CONTROL_MODE_AUTO
         coordinator.async_refresh = AsyncMock()
-        coordinator.temp_toggle = None
         coordinator.lux_toggle = None
         coordinator.irradiance_toggle = None
         coordinator.cloud_toggle = None
@@ -58,7 +56,6 @@ class TestAdaptiveCoverSwitch:
         coordinator.control_mode = CONTROL_MODE_AUTO
         coordinator.async_refresh = AsyncMock()
         coordinator.async_notify_children = AsyncMock()
-        coordinator.temp_toggle = None
         coordinator.lux_toggle = None
         coordinator.irradiance_toggle = None
         coordinator.cloud_toggle = None
@@ -90,17 +87,17 @@ class TestAdaptiveCoverSwitch:
         switch = AdaptiveCoverSwitch(
             config_entry=mock_room_config_entry,
             unique_id=mock_room_config_entry.entry_id,
-            switch_name="Outside Temperature",
+            switch_name="Lux",
             initial_state=False,
-            key="temp_toggle",
+            key="lux_toggle",
             coordinator=mock_room_coordinator,
             is_room=True,
         )
 
         assert switch._name == "Test Room"
-        assert switch._attr_unique_id == "test_room_entry_Outside Temperature"
+        assert switch._attr_unique_id == "test_room_entry_Lux"
         assert switch._is_room is True
-        assert switch._key == "temp_toggle"
+        assert switch._key == "lux_toggle"
         assert "room_" in str(switch._attr_device_info["identifiers"])
 
     def test_init_standalone(
@@ -398,7 +395,6 @@ class TestAdaptiveCoverSwitch:
     ) -> None:
         """Test different switch keys are handled correctly."""
         keys = [
-            ("temp_toggle", "Outside Temperature"),
             ("lux_toggle", "Lux"),
             ("irradiance_toggle", "Irradiance"),
             ("cloud_toggle", "Cloud Coverage"),
@@ -432,7 +428,6 @@ class TestSwitchAsyncSetupEntry:
         coordinator.control_mode = CONTROL_MODE_AUTO
         coordinator.async_refresh = AsyncMock()
         coordinator.async_notify_children = AsyncMock()
-        coordinator.temp_toggle = None
         coordinator.lux_toggle = None
         coordinator.irradiance_toggle = None
         coordinator.cloud_toggle = None
@@ -447,7 +442,6 @@ class TestSwitchAsyncSetupEntry:
         coordinator.logger = MagicMock()
         coordinator.control_mode = CONTROL_MODE_AUTO
         coordinator.async_refresh = AsyncMock()
-        coordinator.temp_toggle = None
         coordinator.lux_toggle = None
         coordinator.irradiance_toggle = None
         coordinator.cloud_toggle = None
@@ -464,11 +458,10 @@ class TestSwitchAsyncSetupEntry:
         # Room entries always have climate_mode=True automatically
         # Need to provide entities for each switch to be created
         entry.options = {
-            CONF_OUTSIDETEMP_ENTITY: "sensor.outside_temp",  # temp_switch
             CONF_LUX_ENTITY: "sensor.lux",  # lux_switch
             CONF_IRRADIANCE_ENTITY: "sensor.irradiance",  # irradiance_switch
             CONF_CLOUD_ENTITY: "sensor.cloud",  # cloud_switch
-            CONF_WEATHER_ENTITY: "weather.home",  # weather_switch & temp_switch
+            CONF_WEATHER_ENTITY: "weather.home",  # weather_switch
         }
         return entry
 
@@ -482,7 +475,6 @@ class TestSwitchAsyncSetupEntry:
         entry.options = {
             CONF_ENTITIES: ["cover.living_room"],
             CONF_CLIMATE_MODE: True,
-            CONF_OUTSIDETEMP_ENTITY: "sensor.outside_temp",
             CONF_LUX_ENTITY: "sensor.lux",
             CONF_IRRADIANCE_ENTITY: "sensor.irradiance",
             CONF_CLOUD_ENTITY: "sensor.cloud",
@@ -522,11 +514,10 @@ class TestSwitchAsyncSetupEntry:
 
         await async_setup_entry(hass, mock_room_config_entry, add_entities)
 
-        # Should create 5 switches: temp, lux, irradiance, cloud, weather
-        assert len(entities_added) == 5
+        # Should create 4 switches: lux, irradiance, cloud, weather
+        assert len(entities_added) == 4
         keys = {e._key for e in entities_added}
         assert keys == {
-            "temp_toggle",
             "lux_toggle",
             "irradiance_toggle",
             "cloud_toggle",
@@ -554,11 +545,10 @@ class TestSwitchAsyncSetupEntry:
 
         await async_setup_entry(hass, mock_cover_config_entry, add_entities)
 
-        # Should create 5 switches
-        assert len(entities_added) == 5
+        # Should create 4 switches
+        assert len(entities_added) == 4
         keys = {e._key for e in entities_added}
         assert keys == {
-            "temp_toggle",
             "lux_toggle",
             "irradiance_toggle",
             "cloud_toggle",
@@ -601,7 +591,6 @@ class TestAdaptiveCoverSwitchCoordinatorUpdates:
         coordinator.logger = MagicMock()
         coordinator.control_mode = CONTROL_MODE_AUTO
         coordinator.async_refresh = AsyncMock()
-        coordinator.temp_toggle = None
         coordinator.lux_toggle = None
         coordinator.irradiance_toggle = None
         coordinator.cloud_toggle = None
@@ -618,7 +607,6 @@ class TestAdaptiveCoverSwitchCoordinatorUpdates:
         coordinator.control_mode = CONTROL_MODE_AUTO
         coordinator.async_refresh = AsyncMock()
         coordinator.async_notify_children = AsyncMock()
-        coordinator.temp_toggle = None
         coordinator.lux_toggle = None
         coordinator.irradiance_toggle = None
         coordinator.cloud_toggle = None

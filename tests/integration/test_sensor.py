@@ -11,7 +11,6 @@ import pytest
 from custom_components.adaptive_cover.const import (
     CONF_CLOUD_ENTITY,
     CONF_ENTRY_TYPE,
-    CONF_OUTSIDETEMP_ENTITY,
     CONF_ROOM_ID,
     CONF_TEMP_ENTITY,
     CONTROL_MODE_AUTO,
@@ -27,7 +26,6 @@ from custom_components.adaptive_cover.sensor import (
     AdaptiveCoverSensorEntity,
     AdaptiveCoverTimeSensorEntity,
     AdaptiveRoomComfortStatusSensorEntity,
-    AdaptiveRoomOutsideTempSensorEntity,
     async_setup_entry,
 )
 
@@ -377,103 +375,6 @@ class TestAdaptiveCoverTimeSensorEntity:
         assert sensor.native_value is None
 
 
-class TestAdaptiveRoomOutsideTempSensorEntity:
-    """Tests for AdaptiveRoomOutsideTempSensorEntity."""
-
-    @pytest.fixture
-    def mock_room_coordinator(self) -> MagicMock:
-        """Create mock RoomCoordinator."""
-        from custom_components.adaptive_cover.room_coordinator import RoomCoordinator
-
-        coordinator = MagicMock(spec=RoomCoordinator)
-        coordinator.outside_temperature = 22.5
-        coordinator.data = RoomData(
-            control_mode="auto",
-            temp_toggle=None,
-            lux_toggle=None,
-            irradiance_toggle=None,
-            cloud_toggle=None,
-            weather_toggle=None,
-            is_presence=True,
-            has_direct_sun=True,
-            outside_temperature=22.5,
-            last_known={},
-        )
-        coordinator.last_update_success = True
-        return coordinator
-
-    @pytest.fixture
-    def mock_room_config_entry(self) -> MagicMock:
-        """Create mock ConfigEntry for room."""
-        entry = MagicMock()
-        entry.entry_id = "test_room_entry"
-        entry.data = {"name": "Test Room", CONF_ENTRY_TYPE: EntryType.ROOM}
-        entry.options = {}
-        return entry
-
-    @pytest.fixture
-    def mock_hass(self, hass: HomeAssistant) -> HomeAssistant:
-        """Return Home Assistant instance."""
-        return hass
-
-    def test_native_value(
-        self,
-        mock_hass: HomeAssistant,
-        mock_room_config_entry: MagicMock,
-        mock_room_coordinator: MagicMock,
-    ) -> None:
-        """Test native_value returns outside_temperature from room coordinator."""
-        sensor = AdaptiveRoomOutsideTempSensorEntity(
-            unique_id=mock_room_config_entry.entry_id,
-            hass=mock_hass,
-            config_entry=mock_room_config_entry,
-            name="Test Room",
-            coordinator=mock_room_coordinator,
-        )
-
-        assert sensor.native_value == 22.5
-
-    def test_native_value_no_data(
-        self,
-        mock_hass: HomeAssistant,
-        mock_room_config_entry: MagicMock,
-        mock_room_coordinator: MagicMock,
-    ) -> None:
-        """Test native_value returns None when outside_temperature is None."""
-        mock_room_coordinator.outside_temperature = None
-
-        sensor = AdaptiveRoomOutsideTempSensorEntity(
-            unique_id=mock_room_config_entry.entry_id,
-            hass=mock_hass,
-            config_entry=mock_room_config_entry,
-            name="Test Room",
-            coordinator=mock_room_coordinator,
-        )
-
-        assert sensor.native_value is None
-
-    def test_device_info(
-        self,
-        mock_hass: HomeAssistant,
-        mock_room_config_entry: MagicMock,
-        mock_room_coordinator: MagicMock,
-    ) -> None:
-        """Test device_info for room sensor."""
-        sensor = AdaptiveRoomOutsideTempSensorEntity(
-            unique_id=mock_room_config_entry.entry_id,
-            hass=mock_hass,
-            config_entry=mock_room_config_entry,
-            name="Test Room",
-            coordinator=mock_room_coordinator,
-        )
-
-        device_info = sensor.device_info
-        identifiers = list(device_info["identifiers"])[0]
-        assert identifiers[0] == DOMAIN
-        assert identifiers[1] == "room_test_room_entry"
-        assert device_info["name"] == "Room: Test Room"
-
-
 class TestAdaptiveCoverControlSensorEntity:
     """Tests for AdaptiveCoverControlSensorEntity (comfort status)."""
 
@@ -603,7 +504,6 @@ class TestAdaptiveCoverCloudSensorEntity:
         coordinator = MagicMock(spec=RoomCoordinator)
         coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -761,7 +661,6 @@ class TestAdaptiveCoverCloudSensorEntity:
         """Test available returns False when room has no cloud data."""
         mock_room_coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -837,7 +736,6 @@ class TestSensorAsyncSetupEntry:
         coordinator = MagicMock(spec=RoomCoordinator)
         coordinator.data = RoomData(
             control_mode="auto",
-            temp_toggle=None,
             lux_toggle=None,
             irradiance_toggle=None,
             cloud_toggle=None,
@@ -847,7 +745,6 @@ class TestSensorAsyncSetupEntry:
             last_known={"cloud": 30.0},
         )
         coordinator.comfort_status = "comfortable"
-        coordinator.outside_temperature = 22.5
         coordinator.last_update_success = True
         coordinator._child_coordinators = []
         coordinator.config_entry = mock_room_config_entry
@@ -878,7 +775,6 @@ class TestSensorAsyncSetupEntry:
         entry.entry_id = "test_room_entry"
         entry.data = {"name": "Test Room", CONF_ENTRY_TYPE: EntryType.ROOM}
         entry.options = {
-            CONF_OUTSIDETEMP_ENTITY: "sensor.outside_temp",
             CONF_TEMP_ENTITY: "sensor.inside_temp",
         }
         return entry
@@ -891,7 +787,6 @@ class TestSensorAsyncSetupEntry:
         entry.data = {"name": "Test Room", CONF_ENTRY_TYPE: EntryType.ROOM}
         entry.options = {
             CONF_CLOUD_ENTITY: "sensor.cloud",
-            CONF_OUTSIDETEMP_ENTITY: "sensor.outside_temp",
             CONF_TEMP_ENTITY: "sensor.inside_temp",
         }
         return entry
@@ -949,11 +844,10 @@ class TestSensorAsyncSetupEntry:
 
         await async_setup_entry(hass, mock_room_config_entry, add_entities)
 
-        # Room gets: Outside Temperature, Comfort Status (no cloud)
-        assert len(entities_added) == 2
+        # Room gets: Comfort Status (no cloud, no outside temp)
+        assert len(entities_added) == 1
 
         entity_types = [type(e).__name__ for e in entities_added]
-        assert "AdaptiveRoomOutsideTempSensorEntity" in entity_types
         assert "AdaptiveRoomComfortStatusSensorEntity" in entity_types
 
     @pytest.mark.asyncio
@@ -975,8 +869,8 @@ class TestSensorAsyncSetupEntry:
 
         await async_setup_entry(hass, mock_room_config_entry_with_cloud, add_entities)
 
-        # Room with cloud gets: Cloud, Outside Temperature, Comfort Status
-        assert len(entities_added) == 3
+        # Room with cloud gets: Cloud, Comfort Status
+        assert len(entities_added) == 2
 
         entity_types = [type(e).__name__ for e in entities_added]
         assert "AdaptiveCoverCloudSensorEntity" in entity_types

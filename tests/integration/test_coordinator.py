@@ -512,14 +512,6 @@ class TestAdaptiveDataUpdateCoordinatorProperties:
         """Test room_coordinator returns None for standalone cover."""
         assert coordinator.room_coordinator is None
 
-    def test_temp_toggle(self, coordinator: AdaptiveDataUpdateCoordinator) -> None:
-        """Test temp_toggle property."""
-        assert coordinator.temp_toggle is None
-        coordinator.temp_toggle = True
-        assert coordinator.temp_toggle is True
-        coordinator.temp_toggle = False
-        assert coordinator.temp_toggle is False
-
     def test_lux_toggle(self, coordinator: AdaptiveDataUpdateCoordinator) -> None:
         """Test lux_toggle property."""
         assert coordinator.lux_toggle is None
@@ -726,7 +718,6 @@ class TestAdaptiveDataUpdateCoordinatorWithRoom:
         room.control_mode = CONTROL_MODE_AUTO
         room.is_control_enabled = True
         room.is_climate_mode = True
-        room.temp_toggle = True
         room.lux_toggle = False
         room.irradiance_toggle = None
         room.cloud_toggle = True
@@ -787,7 +778,6 @@ class TestAdaptiveDataUpdateCoordinatorWithRoom:
         mock_room_coordinator: MagicMock,
     ) -> None:
         """Test toggle properties delegate to room coordinator."""
-        assert coordinator.temp_toggle == mock_room_coordinator.temp_toggle
         assert coordinator.lux_toggle == mock_room_coordinator.lux_toggle
         assert coordinator.irradiance_toggle == mock_room_coordinator.irradiance_toggle
         assert coordinator.cloud_toggle == mock_room_coordinator.cloud_toggle
@@ -2607,7 +2597,6 @@ class TestTogglePropertySettersWithRoom:
     def mock_room_coordinator(self) -> MagicMock:
         """Create mock room coordinator."""
         room = MagicMock()
-        room.temp_toggle = None
         room.lux_toggle = None
         room.irradiance_toggle = None
         room.cloud_toggle = None
@@ -2625,16 +2614,6 @@ class TestTogglePropertySettersWithRoom:
             return AdaptiveDataUpdateCoordinator(
                 hass, mock_config_entry, mock_room_coordinator
             )
-
-    def test_temp_toggle_setter_delegates_to_room(
-        self,
-        coordinator: AdaptiveDataUpdateCoordinator,
-        mock_room_coordinator: MagicMock,
-    ) -> None:
-        """Test temp_toggle setter delegates to room."""
-        coordinator.temp_toggle = True
-
-        assert mock_room_coordinator.temp_toggle is True
 
     def test_lux_toggle_setter_delegates_to_room(
         self,
