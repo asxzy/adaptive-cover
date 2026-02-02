@@ -318,6 +318,7 @@ async def async_setup_entry(
             entities.append(RoomCoverPositionProxySensor(cover_coord, coordinator))
 
         # Listen for future cover registrations
+        @callback
         def _handle_cover_registered(
             cover_coordinator: AdaptiveDataUpdateCoordinator,
         ) -> None:
