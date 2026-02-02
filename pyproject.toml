@@ -37,6 +37,13 @@ dev = [
     "matplotlib>=3.9",
     "ipykernel>=6.29",
 ]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "pytest-homeassistant-custom-component>=0.13",
+    "freezegun>=1.2",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -68,6 +75,7 @@ ignore = [
 ]
 select = ["ALL"]
 src = ["custom_components/adaptive_cover"]
+exclude = ["tests"]
 
 [tool.ruff.flake8-import-conventions.extend-aliases]
 "homeassistant.helpers.area_registry" = "ar"
@@ -93,4 +101,23 @@ disable = [
   "format",
   "duplicate-code",
   "used-before-assignment",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+source = ["custom_components/adaptive_cover"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 25
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
 ]
