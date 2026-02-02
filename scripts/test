@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+# Run pytest with coverage
+uv run --group test pytest --cov=custom_components/adaptive_cover --cov-report=term-missing "$@"
