@@ -340,6 +340,7 @@
     "step": {
       "init": {
         "menu_options": {
+          "rename": "Rename",
           "automation": "Modify Automation Configuration",
           "blind": "Fine-tune Blind Settings",
           "climate": "Edit Climate Configuration",
@@ -351,6 +352,13 @@
           "room_weather": "Edit Room Weather Conditions",
           "move_to_room": "Move to Room",
           "remove_from_room": "Remove from Room"
+        }
+      },
+      "rename": {
+        "title": "Rename",
+        "description": "Enter a new name for this entry. All sensors will be renamed accordingly.",
+        "data": {
+          "name": "Name"
         }
       },
       "automation": {

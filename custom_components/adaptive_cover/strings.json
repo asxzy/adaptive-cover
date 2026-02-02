@@ -317,6 +317,7 @@
     "step": {
       "init": {
         "menu_options": {
+          "rename": "Rename",
           "automation": "Modify Automation Configuration",
           "blind": "Fine-tune Blind Settings",
           "climate": "Edit Climate Configuration",
@@ -326,6 +327,13 @@
           "room_automation": "Modify Room Automation",
           "room_climate": "Edit Room Climate Settings",
           "room_weather": "Edit Room Weather Conditions"
+        }
+      },
+      "rename": {
+        "title": "Rename",
+        "description": "Enter a new name for this entry. All sensors will be renamed accordingly.",
+        "data": {
+          "name": "Name"
         }
       },
       "room_climate": {

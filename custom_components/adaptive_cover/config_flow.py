@@ -915,17 +915,17 @@ class OptionsFlowHandler(OptionsFlow):
         """Manage the options."""
         # Room entry - show room-specific options
         if self.entry_type == EntryType.ROOM:
-            options = ["room_automation", "room_climate"]
+            options = ["rename", "room_automation", "room_climate"]
             if self.options.get(CONF_WEATHER_ENTITY):
                 options.append("room_weather")
             return self.async_show_menu(step_id="init", menu_options=options)
 
         # Cover entry (standalone or part of room)
-        options = ["blind"]
+        options = ["rename", "blind"]
 
         # Only show automation/climate options for standalone covers
         if not self.room_id:
-            options.insert(0, "automation")
+            options.insert(1, "automation")
             if self.options.get(CONF_CLIMATE_MODE):
                 options.append("climate")
             if self.options.get(CONF_WEATHER_ENTITY):
@@ -942,6 +942,46 @@ class OptionsFlowHandler(OptionsFlow):
         if self.options.get(CONF_INTERP):
             options.append("interp")
         return self.async_show_menu(step_id="init", menu_options=options)
+
+    async def async_step_rename(self, user_input: dict[str, Any] | None = None):
+        """Rename this entry."""
+        rename_schema = vol.Schema(
+            {
+                vol.Required(
+                    "name", default=self.current_config.get("name", "")
+                ): selector.TextSelector(),
+            }
+        )
+
+        if user_input:
+            new_name = user_input["name"]
+
+            # Build new title based on entry type
+            if self.entry_type == EntryType.ROOM:
+                new_title = f"Room: {new_name}"
+            else:
+                type_names = {
+                    SensorType.BLIND: "Vertical",
+                    SensorType.AWNING: "Horizontal",
+                    SensorType.TILT: "Tilt",
+                }
+                type_name = type_names.get(self.sensor_type, "Vertical")
+
+                if self.room_id:
+                    new_title = f"{type_name} {new_name} (Room)"
+                else:
+                    new_title = f"{type_name} {new_name}"
+
+            # Update config entry data and title
+            new_data = dict(self._config_entry.data)
+            new_data["name"] = new_name
+            self.hass.config_entries.async_update_entry(
+                self._config_entry, data=new_data, title=new_title
+            )
+
+            return self.async_create_entry(title="", data=self.options)
+
+        return self.async_show_form(step_id="rename", data_schema=rename_schema)
 
     async def async_step_room_automation(
         self, user_input: dict[str, Any] | None = None
