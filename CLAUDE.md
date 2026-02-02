@@ -13,10 +13,10 @@ Adaptive Cover is a Home Assistant custom integration that calculates optimal bl
 ./scripts/setup
 
 # Run linter with auto-fix
-uvx ruff check . --fix
+uv run ruff check . --fix
 
 # Format code
-uvx ruff format .
+uv run ruff format .
 
 # Start Home Assistant dev server (port 8123)
 ./scripts/develop
@@ -100,7 +100,7 @@ No unit test framework. Testing is done via:
 
 - Ruff with `select = ["ALL"]` (aggressive linting)
 - Pre-commit hooks enforce formatting
-- Target Python 3.12
+- Target Python 3.13
 - Follow Home Assistant integration patterns (DataUpdateCoordinator, ConfigEntry, etc.)
 
 ## Debugging
