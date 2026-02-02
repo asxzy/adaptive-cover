@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from homeassistant.const import STATE_OFF, STATE_ON
+
 from custom_components.adaptive_cover.const import (
     CONF_CLIMATE_MODE,
     CONF_CLOUD_ENTITY,
@@ -587,3 +589,221 @@ class TestSwitchAsyncSetupEntry:
         await async_setup_entry(hass, mock_cover_in_room_config_entry, add_entities)
 
         assert len(entities_added) == 0
+
+
+class TestAdaptiveCoverSwitchCoordinatorUpdates:
+    """Tests for AdaptiveCoverSwitch coordinator update handling."""
+
+    @pytest.fixture
+    def mock_cover_coordinator(self) -> MagicMock:
+        """Create mock AdaptiveDataUpdateCoordinator."""
+        coordinator = MagicMock()
+        coordinator.logger = MagicMock()
+        coordinator.control_mode = CONTROL_MODE_AUTO
+        coordinator.async_refresh = AsyncMock()
+        coordinator.temp_toggle = None
+        coordinator.lux_toggle = None
+        coordinator.irradiance_toggle = None
+        coordinator.cloud_toggle = None
+        coordinator.weather_toggle = None
+        return coordinator
+
+    @pytest.fixture
+    def mock_room_coordinator(self) -> MagicMock:
+        """Create mock RoomCoordinator."""
+        from custom_components.adaptive_cover.room_coordinator import RoomCoordinator
+
+        coordinator = MagicMock(spec=RoomCoordinator)
+        coordinator.logger = MagicMock()
+        coordinator.control_mode = CONTROL_MODE_AUTO
+        coordinator.async_refresh = AsyncMock()
+        coordinator.async_notify_children = AsyncMock()
+        coordinator.temp_toggle = None
+        coordinator.lux_toggle = None
+        coordinator.irradiance_toggle = None
+        coordinator.cloud_toggle = None
+        coordinator.weather_toggle = None
+        return coordinator
+
+    @pytest.fixture
+    def mock_cover_config_entry(self) -> MagicMock:
+        """Create mock ConfigEntry for cover."""
+        entry = MagicMock()
+        entry.entry_id = "test_cover_entry"
+        entry.data = {"name": "Test Cover", CONF_ENTRY_TYPE: EntryType.COVER}
+        entry.options = {}
+        return entry
+
+    @pytest.fixture
+    def mock_room_config_entry(self) -> MagicMock:
+        """Create mock ConfigEntry for room."""
+        entry = MagicMock()
+        entry.entry_id = "test_room_entry"
+        entry.data = {"name": "Test Room", CONF_ENTRY_TYPE: EntryType.ROOM}
+        entry.options = {}
+        return entry
+
+    def test_handle_coordinator_update_calls_async_write_ha_state(
+        self, mock_cover_config_entry: MagicMock, mock_cover_coordinator: MagicMock
+    ) -> None:
+        """Test _handle_coordinator_update calls async_write_ha_state."""
+        switch = AdaptiveCoverSwitch(
+            config_entry=mock_cover_config_entry,
+            unique_id=mock_cover_config_entry.entry_id,
+            switch_name="Lux",
+            initial_state=True,
+            key="lux_toggle",
+            coordinator=mock_cover_coordinator,
+        )
+        switch.async_write_ha_state = MagicMock()
+
+        switch._handle_coordinator_update()
+
+        switch.async_write_ha_state.assert_called_once()
+
+    def test_availability_changes_with_control_mode(
+        self, mock_cover_config_entry: MagicMock, mock_cover_coordinator: MagicMock
+    ) -> None:
+        """Test availability changes when coordinator control_mode changes."""
+        mock_cover_coordinator.control_mode = CONTROL_MODE_AUTO
+        switch = AdaptiveCoverSwitch(
+            config_entry=mock_cover_config_entry,
+            unique_id=mock_cover_config_entry.entry_id,
+            switch_name="Lux",
+            initial_state=True,
+            key="lux_toggle",
+            coordinator=mock_cover_coordinator,
+        )
+
+        # Initially available in AUTO mode
+        assert switch.available is True
+
+        # Change to DISABLED - should become unavailable
+        mock_cover_coordinator.control_mode = CONTROL_MODE_DISABLED
+        assert switch.available is False
+
+        # Change back to AUTO - should become available again
+        mock_cover_coordinator.control_mode = CONTROL_MODE_AUTO
+        assert switch.available is True
+
+    @pytest.mark.asyncio
+    async def test_async_added_to_hass_restores_on_state(
+        self, mock_cover_config_entry: MagicMock, mock_cover_coordinator: MagicMock
+    ) -> None:
+        """Test async_added_to_hass restores ON state."""
+        switch = AdaptiveCoverSwitch(
+            config_entry=mock_cover_config_entry,
+            unique_id=mock_cover_config_entry.entry_id,
+            switch_name="Lux",
+            initial_state=False,
+            key="lux_toggle",
+            coordinator=mock_cover_coordinator,
+        )
+        switch.schedule_update_ha_state = MagicMock()
+
+        mock_state = MagicMock()
+        mock_state.state = STATE_ON
+        switch.async_get_last_state = AsyncMock(return_value=mock_state)
+
+        # Mock super().async_added_to_hass() to avoid needing full hass setup
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "custom_components.adaptive_cover.switch.CoordinatorEntity.async_added_to_hass",
+                AsyncMock(),
+            )
+            await switch.async_added_to_hass()
+
+        assert switch._attr_is_on is True
+        assert mock_cover_coordinator.lux_toggle is True
+
+    @pytest.mark.asyncio
+    async def test_async_added_to_hass_restores_off_state(
+        self, mock_cover_config_entry: MagicMock, mock_cover_coordinator: MagicMock
+    ) -> None:
+        """Test async_added_to_hass restores OFF state."""
+        switch = AdaptiveCoverSwitch(
+            config_entry=mock_cover_config_entry,
+            unique_id=mock_cover_config_entry.entry_id,
+            switch_name="Lux",
+            initial_state=True,
+            key="lux_toggle",
+            coordinator=mock_cover_coordinator,
+        )
+        switch.schedule_update_ha_state = MagicMock()
+
+        mock_state = MagicMock()
+        mock_state.state = STATE_OFF
+        switch.async_get_last_state = AsyncMock(return_value=mock_state)
+
+        # Mock super().async_added_to_hass() to avoid needing full hass setup
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "custom_components.adaptive_cover.switch.CoordinatorEntity.async_added_to_hass",
+                AsyncMock(),
+            )
+            await switch.async_added_to_hass()
+
+        assert switch._attr_is_on is False
+        assert mock_cover_coordinator.lux_toggle is False
+
+    @pytest.mark.asyncio
+    async def test_async_added_to_hass_uses_initial_state_when_no_last_state(
+        self, mock_cover_config_entry: MagicMock, mock_cover_coordinator: MagicMock
+    ) -> None:
+        """Test async_added_to_hass uses initial_state when no last state."""
+        switch = AdaptiveCoverSwitch(
+            config_entry=mock_cover_config_entry,
+            unique_id=mock_cover_config_entry.entry_id,
+            switch_name="Lux",
+            initial_state=True,
+            key="lux_toggle",
+            coordinator=mock_cover_coordinator,
+        )
+        switch.schedule_update_ha_state = MagicMock()
+        switch.async_get_last_state = AsyncMock(return_value=None)
+
+        # Mock super().async_added_to_hass() to avoid needing full hass setup
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "custom_components.adaptive_cover.switch.CoordinatorEntity.async_added_to_hass",
+                AsyncMock(),
+            )
+            await switch.async_added_to_hass()
+
+        # Should use initial_state=True
+        assert switch._attr_is_on is True
+        assert mock_cover_coordinator.lux_toggle is True
+
+    @pytest.mark.asyncio
+    async def test_async_added_to_hass_room_coordinator_restores_state(
+        self, mock_room_config_entry: MagicMock, mock_room_coordinator: MagicMock
+    ) -> None:
+        """Test async_added_to_hass restores state for room coordinator."""
+        switch = AdaptiveCoverSwitch(
+            config_entry=mock_room_config_entry,
+            unique_id=mock_room_config_entry.entry_id,
+            switch_name="Cloud Coverage",
+            initial_state=False,
+            key="cloud_toggle",
+            coordinator=mock_room_coordinator,
+            is_room=True,
+        )
+        switch.schedule_update_ha_state = MagicMock()
+
+        mock_state = MagicMock()
+        mock_state.state = STATE_ON
+        switch.async_get_last_state = AsyncMock(return_value=mock_state)
+
+        # Mock super().async_added_to_hass() to avoid needing full hass setup
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "custom_components.adaptive_cover.switch.CoordinatorEntity.async_added_to_hass",
+                AsyncMock(),
+            )
+            await switch.async_added_to_hass()
+
+        assert switch._attr_is_on is True
+        assert mock_room_coordinator.cloud_toggle is True
+        # Should NOT call async_refresh or notify_children (added=True flag)
+        mock_room_coordinator.async_refresh.assert_not_called()
+        mock_room_coordinator.async_notify_children.assert_not_called()
