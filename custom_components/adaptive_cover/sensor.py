@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -14,6 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -26,11 +27,229 @@ from .const import (
     CONTROL_MODE_DISABLED,
     DOMAIN,
     EntryType,
+    SIGNAL_COVER_REGISTERED,
 )
 from .coordinator import AdaptiveDataUpdateCoordinator
 from .room_coordinator import RoomCoordinator
 
 CoordinatorType = AdaptiveDataUpdateCoordinator | RoomCoordinator
+
+
+class ProxySensorEntity(SensorEntity):
+    """Base class for proxy sensors that display data from a different coordinator."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        source_coordinator: CoordinatorType,
+        device_info: DeviceInfo,
+        unique_id: str,
+        name: str,
+    ) -> None:
+        """Initialize proxy sensor."""
+        self._source_coordinator = source_coordinator
+        self._attr_device_info = device_info
+        self._attr_unique_id = unique_id
+        self._attr_name = name
+        self._unsub: Callable[[], None] | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to source coordinator updates."""
+        self._unsub = self._source_coordinator.async_add_listener(
+            self._handle_source_update
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Unsubscribe from source coordinator."""
+        if self._unsub:
+            self._unsub()
+            self._unsub = None
+
+    @callback
+    def _handle_source_update(self) -> None:
+        """Handle update from source coordinator."""
+        self.async_write_ha_state()
+
+
+# Cover-to-Room Proxy Sensors
+
+
+class CoverRoomCloudProxySensor(ProxySensorEntity):
+    """Proxy sensor showing room's cloud coverage on cover device."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_icon = "mdi:weather-cloudy"
+
+    def __init__(
+        self,
+        room_coordinator: RoomCoordinator,
+        cover_entry_id: str,
+        cover_name: str,
+        room_id: str,
+    ) -> None:
+        """Initialize the proxy sensor."""
+        device_info = DeviceInfo(
+            entry_type=DeviceEntryType.SERVICE,
+            identifiers={(DOMAIN, cover_entry_id)},
+            name=cover_name,
+            via_device=(DOMAIN, f"room_{room_id}"),
+        )
+        super().__init__(
+            source_coordinator=room_coordinator,
+            device_info=device_info,
+            unique_id=f"{cover_entry_id}_room_proxy_cloud",
+            name="Cloud Coverage (Room)",
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the cloud coverage from room."""
+        if self._source_coordinator.data is None:
+            return None
+        return self._source_coordinator.data.cloud_coverage
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        if self._source_coordinator.data is None:
+            return False
+        return self._source_coordinator.data.cloud_coverage is not None
+
+
+class CoverRoomTempProxySensor(ProxySensorEntity):
+    """Proxy sensor showing room's outside temperature on cover device."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:thermometer"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        room_coordinator: RoomCoordinator,
+        cover_entry_id: str,
+        cover_name: str,
+        room_id: str,
+    ) -> None:
+        """Initialize the proxy sensor."""
+        device_info = DeviceInfo(
+            entry_type=DeviceEntryType.SERVICE,
+            identifiers={(DOMAIN, cover_entry_id)},
+            name=cover_name,
+            via_device=(DOMAIN, f"room_{room_id}"),
+        )
+        super().__init__(
+            source_coordinator=room_coordinator,
+            device_info=device_info,
+            unique_id=f"{cover_entry_id}_room_proxy_temp",
+            name="Outside Temperature (Room)",
+        )
+        self._attr_native_unit_of_measurement = hass.config.units.temperature_unit
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the outside temperature from room."""
+        if self._source_coordinator.data is None:
+            return None
+        return self._source_coordinator.data.outside_temperature
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        if self._source_coordinator.data is None:
+            return False
+        return self._source_coordinator.data.outside_temperature is not None
+
+
+class CoverRoomComfortProxySensor(ProxySensorEntity):
+    """Proxy sensor showing room's comfort status on cover device."""
+
+    _attr_translation_key = "comfort_status"
+
+    def __init__(
+        self,
+        room_coordinator: RoomCoordinator,
+        cover_entry_id: str,
+        cover_name: str,
+        room_id: str,
+    ) -> None:
+        """Initialize the proxy sensor."""
+        device_info = DeviceInfo(
+            entry_type=DeviceEntryType.SERVICE,
+            identifiers={(DOMAIN, cover_entry_id)},
+            name=cover_name,
+            via_device=(DOMAIN, f"room_{room_id}"),
+        )
+        super().__init__(
+            source_coordinator=room_coordinator,
+            device_info=device_info,
+            unique_id=f"{cover_entry_id}_room_proxy_comfort",
+            name="Comfort Status (Room)",
+        )
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the comfort status from room."""
+        return self._source_coordinator.comfort_status
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return self._source_coordinator.data is not None
+
+
+# Room-to-Cover Proxy Sensors
+
+
+class RoomCoverPositionProxySensor(ProxySensorEntity):
+    """Proxy sensor showing a cover's position on room device."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_icon = "mdi:sun-compass"
+
+    def __init__(
+        self,
+        cover_coordinator: AdaptiveDataUpdateCoordinator,
+        room_coordinator: RoomCoordinator,
+    ) -> None:
+        """Initialize the proxy sensor."""
+        cover_name = cover_coordinator.config_entry.data["name"]
+        room_id = room_coordinator.config_entry.entry_id
+        room_name = room_coordinator.config_entry.data["name"]
+
+        device_info = DeviceInfo(
+            entry_type=DeviceEntryType.SERVICE,
+            identifiers={(DOMAIN, f"room_{room_id}")},
+            name=f"Room: {room_name}",
+        )
+        super().__init__(
+            source_coordinator=cover_coordinator,
+            device_info=device_info,
+            unique_id=f"room_{room_id}_proxy_{cover_coordinator.config_entry.entry_id}_position",
+            name=f"{cover_name} Position",
+        )
+        self._cover_coordinator = cover_coordinator
+        self._room_coordinator = room_coordinator
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the cover position."""
+        if self._cover_coordinator.data is None:
+            return None
+        return self._cover_coordinator.data.states.get("state")
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        if self._cover_coordinator not in self._room_coordinator._child_coordinators:
+            return False
+        if self._cover_coordinator.data is None:
+            return False
+        return self._cover_coordinator.data.states.get("state") is not None
 
 
 async def async_setup_entry(
@@ -46,8 +265,9 @@ async def async_setup_entry(
 
     entities = []
 
-    # Room entry - cloud coverage sensor and aggregated time sensors
+    # Room entry - room-level sensors
     if entry_type == EntryType.ROOM:
+        # Cloud coverage sensor (if configured)
         cloud_entity = config_entry.options.get(CONF_CLOUD_ENTITY)
         if cloud_entity:
             cloud_sensor = AdaptiveCoverCloudSensorEntity(
@@ -60,30 +280,17 @@ async def async_setup_entry(
             )
             entities.append(cloud_sensor)
 
-        # Aggregated Start Sun and End Sun sensors for room
-        start = AdaptiveRoomTimeSensorEntity(
+        # Outside temperature sensor for room
+        outside_temp = AdaptiveRoomOutsideTempSensorEntity(
             config_entry.entry_id,
             hass,
             config_entry,
             name,
-            "Start Sun",
-            "start_sun",
-            "mdi:sun-clock-outline",
             coordinator,
         )
-        end = AdaptiveRoomTimeSensorEntity(
-            config_entry.entry_id,
-            hass,
-            config_entry,
-            name,
-            "End Sun",
-            "end_sun",
-            "mdi:sun-clock",
-            coordinator,
-        )
-        entities.extend([start, end])
+        entities.append(outside_temp)
 
-        # Comfort Status sensor for room (aggregates from child covers)
+        # Comfort Status sensor for room
         comfort_status = AdaptiveRoomComfortStatusSensorEntity(
             config_entry.entry_id,
             hass,
@@ -93,7 +300,37 @@ async def async_setup_entry(
         )
         entities.append(comfort_status)
 
-    # Cover entry - position sensor always, time sensors only for standalone
+        # Store callback for dynamic proxy sensor creation
+        hass.data[DOMAIN][f"room_{config_entry.entry_id}_add_sensors"] = (
+            async_add_entities
+        )
+
+        # Create proxy sensors for already-registered covers
+        for cover_coord in coordinator._child_coordinators:
+            entities.append(RoomCoverPositionProxySensor(cover_coord, coordinator))
+
+        # Listen for future cover registrations
+        def _handle_cover_registered(
+            cover_coordinator: AdaptiveDataUpdateCoordinator,
+        ) -> None:
+            """Handle new cover registration by creating proxy sensors."""
+            add_entities = hass.data[DOMAIN].get(
+                f"room_{config_entry.entry_id}_add_sensors"
+            )
+            if add_entities:
+                add_entities(
+                    [RoomCoverPositionProxySensor(cover_coordinator, coordinator)]
+                )
+
+        config_entry.async_on_unload(
+            async_dispatcher_connect(
+                hass,
+                f"{SIGNAL_COVER_REGISTERED}_{config_entry.entry_id}",
+                _handle_cover_registered,
+            )
+        )
+
+    # Cover entry - position sensor and time sensors
     else:
         sensor = AdaptiveCoverSensorEntity(
             config_entry.entry_id,
@@ -105,31 +342,64 @@ async def async_setup_entry(
         )
         entities.append(sensor)
 
-        # Time sensors only for standalone covers (room provides aggregated values)
-        if not room_id:
-            start = AdaptiveCoverTimeSensorEntity(
-                config_entry.entry_id,
-                hass,
-                config_entry,
-                name,
-                "Start Sun",
-                "start",
-                "mdi:sun-clock-outline",
-                coordinator,
-            )
-            end = AdaptiveCoverTimeSensorEntity(
-                config_entry.entry_id,
-                hass,
-                config_entry,
-                name,
-                "End Sun",
-                "end",
-                "mdi:sun-clock",
-                coordinator,
-            )
-            entities.extend([start, end])
+        # Time sensors for ALL covers
+        start = AdaptiveCoverTimeSensorEntity(
+            config_entry.entry_id,
+            hass,
+            config_entry,
+            name,
+            "Start Sun",
+            "start",
+            "mdi:sun-clock-outline",
+            coordinator,
+            room_id=room_id,
+        )
+        end = AdaptiveCoverTimeSensorEntity(
+            config_entry.entry_id,
+            hass,
+            config_entry,
+            name,
+            "End Sun",
+            "end",
+            "mdi:sun-clock",
+            coordinator,
+            room_id=room_id,
+        )
+        entities.extend([start, end])
 
-            # Comfort Status only for standalone covers (room handles this)
+        # Covers in a room get proxy sensors for room data
+        if room_id:
+            room_coordinator = hass.data[DOMAIN].get(f"room_{room_id}")
+            if room_coordinator:
+                # Cloud coverage proxy
+                cloud_proxy = CoverRoomCloudProxySensor(
+                    room_coordinator,
+                    config_entry.entry_id,
+                    name,
+                    room_id,
+                )
+                entities.append(cloud_proxy)
+
+                # Outside temperature proxy
+                temp_proxy = CoverRoomTempProxySensor(
+                    hass,
+                    room_coordinator,
+                    config_entry.entry_id,
+                    name,
+                    room_id,
+                )
+                entities.append(temp_proxy)
+
+                # Comfort status proxy
+                comfort_proxy = CoverRoomComfortProxySensor(
+                    room_coordinator,
+                    config_entry.entry_id,
+                    name,
+                    room_id,
+                )
+                entities.append(comfort_proxy)
+        else:
+            # Standalone covers get their own comfort status and cloud sensors
             control = AdaptiveCoverControlSensorEntity(
                 config_entry.entry_id,
                 hass,
@@ -180,7 +450,6 @@ class AdaptiveCoverSensorEntity(
         self._device_id = unique_id
         self._room_id = room_id
 
-        # When cover belongs to a room, include cover name in entity name
         if room_id:
             self._attr_has_entity_name = False
             self._attr_name = f"{name} Cover Position"
@@ -194,10 +463,7 @@ class AdaptiveCoverSensorEntity(
 
     @property
     def available(self) -> bool:
-        """Return if entity is available.
-
-        Cover position sensor is unavailable when control mode is OFF or data not ready.
-        """
+        """Return if entity is available."""
         if self.coordinator.control_mode == CONTROL_MODE_DISABLED:
             return False
         data = self.coordinator.data
@@ -266,7 +532,6 @@ class AdaptiveCoverTimeSensorEntity(
         self._name = name
         self._room_id = room_id
 
-        # When cover belongs to a room, include cover name in entity name
         if room_id:
             self._attr_has_entity_name = False
             self._attr_name = f"{name} {sensor_name}"
@@ -299,10 +564,13 @@ class AdaptiveCoverTimeSensorEntity(
         return info
 
 
-class AdaptiveRoomTimeSensorEntity(CoordinatorEntity[RoomCoordinator], SensorEntity):
-    """Adaptive Cover Room Time Sensor for aggregated Start/End Sun times."""
+class AdaptiveRoomOutsideTempSensorEntity(
+    CoordinatorEntity[RoomCoordinator], SensorEntity
+):
+    """Adaptive Cover Room Outside Temperature Sensor."""
 
-    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name = True
     _attr_should_poll = False
 
@@ -312,37 +580,38 @@ class AdaptiveRoomTimeSensorEntity(CoordinatorEntity[RoomCoordinator], SensorEnt
         hass,
         config_entry,
         name: str,
-        sensor_name: str,
-        key: str,
-        icon: str,
         coordinator: RoomCoordinator,
     ) -> None:
-        """Initialize adaptive_cover Room Time Sensor."""
+        """Initialize adaptive_cover Room Outside Temperature Sensor."""
         super().__init__(coordinator=coordinator)
-        self._attr_icon = icon
-        self.key = key
+        self._attr_icon = "mdi:thermometer"
         self.coordinator = coordinator
-        self._attr_unique_id = f"{unique_id}_{sensor_name}"
+        self._attr_unique_id = f"{unique_id}_Outside Temperature"
         self._device_id = unique_id
         self.hass = hass
         self.config_entry = config_entry
         self._name = name
-        self._attr_name = sensor_name
+        self._attr_name = "Outside Temperature"
+        self._attr_native_unit_of_measurement = hass.config.units.temperature_unit
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        _LOGGER.debug(
-            "RoomTimeSensor[%s] _handle_coordinator_update called", self.key
-        )
         self.async_write_ha_state()
 
     @property
-    def native_value(self):
-        """Return the aggregated time value from room coordinator."""
-        value = getattr(self.coordinator, self.key, None)
-        _LOGGER.debug("RoomTimeSensor[%s] native_value: %s", self.key, value)
-        return value
+    def native_value(self) -> float | None:
+        """Return the outside temperature value from room coordinator."""
+        return self.coordinator.outside_temperature
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        if not super().available:
+            return False
+        if self.coordinator.data is None:
+            return False
+        return self.coordinator.outside_temperature is not None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -383,7 +652,6 @@ class AdaptiveCoverControlSensorEntity(
         self._name = name
         self._room_id = room_id
 
-        # When cover belongs to a room, include cover name in entity name
         if room_id:
             self._attr_has_entity_name = False
             self._attr_name = f"{name} Comfort Status"
@@ -451,7 +719,7 @@ class AdaptiveRoomComfortStatusSensorEntity(
 
     @property
     def native_value(self) -> str | None:
-        """Return the comfort status aggregated from child covers."""
+        """Return the comfort status calculated from inside temp vs thresholds."""
         value = self.coordinator.comfort_status
         _LOGGER.debug("RoomComfortStatusSensor native_value: %s", value)
         return value
@@ -504,7 +772,6 @@ class AdaptiveCoverCloudSensorEntity(CoordinatorEntity[CoordinatorType], SensorE
     def native_value(self) -> float | None:
         """Return the cloud coverage percentage."""
         if isinstance(self.coordinator, RoomCoordinator):
-            # For room coordinator, get from last_known if available
             if self.coordinator.data is None:
                 _LOGGER.debug("Cloud sensor: coordinator.data is None")
                 return None

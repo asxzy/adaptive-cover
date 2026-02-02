@@ -394,7 +394,7 @@ class TestBinarySensorAsyncSetupEntry:
     """Tests for binary_sensor async_setup_entry function."""
 
     @pytest.fixture
-    def mock_room_coordinator(self) -> MagicMock:
+    def mock_room_coordinator(self, mock_room_config_entry: MagicMock) -> MagicMock:
         """Create mock RoomCoordinator."""
         from custom_components.adaptive_cover.room_coordinator import RoomCoordinator
 
@@ -412,6 +412,8 @@ class TestBinarySensorAsyncSetupEntry:
             last_known={"is_presence": True, "has_direct_sun": True},
         )
         coordinator.last_update_success = True
+        coordinator._child_coordinators = []
+        coordinator.config_entry = mock_room_config_entry
         return coordinator
 
     @pytest.fixture
@@ -464,13 +466,13 @@ class TestBinarySensorAsyncSetupEntry:
         return entry
 
     @pytest.mark.asyncio
-    async def test_setup_room_entry_creates_presence_sensor(
+    async def test_setup_room_entry_creates_binary_sensors(
         self,
         hass,
         mock_room_config_entry: MagicMock,
         mock_room_coordinator: MagicMock,
     ) -> None:
-        """Test async_setup_entry creates presence sensor for room."""
+        """Test async_setup_entry creates binary sensors for room."""
         from custom_components.adaptive_cover.binary_sensor import async_setup_entry
 
         hass.data[DOMAIN] = {mock_room_config_entry.entry_id: mock_room_coordinator}
@@ -482,9 +484,11 @@ class TestBinarySensorAsyncSetupEntry:
 
         await async_setup_entry(hass, mock_room_config_entry, add_entities)
 
-        assert len(entities_added) == 1
-        assert entities_added[0]._key == "is_presence"
-        assert entities_added[0]._is_room is True
+        # Room gets: is_presence and has_direct_sun
+        assert len(entities_added) == 2
+        keys = {e._key for e in entities_added}
+        assert keys == {"is_presence", "has_direct_sun"}
+        assert all(e._is_room is True for e in entities_added)
 
     @pytest.mark.asyncio
     async def test_setup_standalone_cover_creates_binary_sensors(
@@ -517,8 +521,11 @@ class TestBinarySensorAsyncSetupEntry:
         mock_cover_in_room_config_entry: MagicMock,
         mock_cover_coordinator: MagicMock,
     ) -> None:
-        """Test async_setup_entry creates sun motion sensor for cover in room."""
+        """Test async_setup_entry creates sun motion sensor for cover in room (no room loaded)."""
         from custom_components.adaptive_cover.binary_sensor import async_setup_entry
+
+        # Ensure cover coordinator doesn't have room_coordinator reference
+        mock_cover_coordinator.room_coordinator = None
 
         hass.data[DOMAIN] = {
             mock_cover_in_room_config_entry.entry_id: mock_cover_coordinator
@@ -531,6 +538,7 @@ class TestBinarySensorAsyncSetupEntry:
 
         await async_setup_entry(hass, mock_cover_in_room_config_entry, add_entities)
 
+        # Cover in room without room_coordinator loaded gets only sun_motion
         assert len(entities_added) == 1
         assert entities_added[0]._key == "sun_motion"
         assert entities_added[0]._room_id == "room_123"

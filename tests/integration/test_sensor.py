@@ -25,7 +25,7 @@ from custom_components.adaptive_cover.sensor import (
     AdaptiveCoverSensorEntity,
     AdaptiveCoverTimeSensorEntity,
     AdaptiveRoomComfortStatusSensorEntity,
-    AdaptiveRoomTimeSensorEntity,
+    AdaptiveRoomOutsideTempSensorEntity,
     async_setup_entry,
 )
 
@@ -375,15 +375,29 @@ class TestAdaptiveCoverTimeSensorEntity:
         assert sensor.native_value is None
 
 
-class TestAdaptiveRoomTimeSensorEntity:
-    """Tests for AdaptiveRoomTimeSensorEntity."""
+class TestAdaptiveRoomOutsideTempSensorEntity:
+    """Tests for AdaptiveRoomOutsideTempSensorEntity."""
 
     @pytest.fixture
     def mock_room_coordinator(self) -> MagicMock:
         """Create mock RoomCoordinator."""
-        coordinator = MagicMock()
-        coordinator.start_sun = datetime(2024, 6, 21, 8, 0, 0)
-        coordinator.end_sun = datetime(2024, 6, 21, 20, 0, 0)
+        from custom_components.adaptive_cover.room_coordinator import RoomCoordinator
+
+        coordinator = MagicMock(spec=RoomCoordinator)
+        coordinator.outside_temperature = 22.5
+        coordinator.data = RoomData(
+            control_mode="auto",
+            temp_toggle=None,
+            lux_toggle=None,
+            irradiance_toggle=None,
+            cloud_toggle=None,
+            weather_toggle=None,
+            is_presence=True,
+            has_direct_sun=True,
+            outside_temperature=22.5,
+            last_known={},
+        )
+        coordinator.last_update_success = True
         return coordinator
 
     @pytest.fixture
@@ -400,45 +414,41 @@ class TestAdaptiveRoomTimeSensorEntity:
         """Return Home Assistant instance."""
         return hass
 
-    def test_native_value_start_sun(
+    def test_native_value(
         self,
         mock_hass: HomeAssistant,
         mock_room_config_entry: MagicMock,
         mock_room_coordinator: MagicMock,
     ) -> None:
-        """Test native_value returns aggregated start_sun."""
-        sensor = AdaptiveRoomTimeSensorEntity(
+        """Test native_value returns outside_temperature from room coordinator."""
+        sensor = AdaptiveRoomOutsideTempSensorEntity(
             unique_id=mock_room_config_entry.entry_id,
             hass=mock_hass,
             config_entry=mock_room_config_entry,
             name="Test Room",
-            sensor_name="Start Sun",
-            key="start_sun",
-            icon="mdi:sun-clock-outline",
             coordinator=mock_room_coordinator,
         )
 
-        assert sensor.native_value == datetime(2024, 6, 21, 8, 0, 0)
+        assert sensor.native_value == 22.5
 
-    def test_native_value_end_sun(
+    def test_native_value_no_data(
         self,
         mock_hass: HomeAssistant,
         mock_room_config_entry: MagicMock,
         mock_room_coordinator: MagicMock,
     ) -> None:
-        """Test native_value returns aggregated end_sun."""
-        sensor = AdaptiveRoomTimeSensorEntity(
+        """Test native_value returns None when outside_temperature is None."""
+        mock_room_coordinator.outside_temperature = None
+
+        sensor = AdaptiveRoomOutsideTempSensorEntity(
             unique_id=mock_room_config_entry.entry_id,
             hass=mock_hass,
             config_entry=mock_room_config_entry,
             name="Test Room",
-            sensor_name="End Sun",
-            key="end_sun",
-            icon="mdi:sun-clock",
             coordinator=mock_room_coordinator,
         )
 
-        assert sensor.native_value == datetime(2024, 6, 21, 20, 0, 0)
+        assert sensor.native_value is None
 
     def test_device_info(
         self,
@@ -447,14 +457,11 @@ class TestAdaptiveRoomTimeSensorEntity:
         mock_room_coordinator: MagicMock,
     ) -> None:
         """Test device_info for room sensor."""
-        sensor = AdaptiveRoomTimeSensorEntity(
+        sensor = AdaptiveRoomOutsideTempSensorEntity(
             unique_id=mock_room_config_entry.entry_id,
             hass=mock_hass,
             config_entry=mock_room_config_entry,
             name="Test Room",
-            sensor_name="Start Sun",
-            key="start_sun",
-            icon="mdi:sun-clock-outline",
             coordinator=mock_room_coordinator,
         )
 
@@ -821,7 +828,7 @@ class TestSensorAsyncSetupEntry:
     """Tests for sensor async_setup_entry function."""
 
     @pytest.fixture
-    def mock_room_coordinator(self) -> MagicMock:
+    def mock_room_coordinator(self, mock_room_config_entry: MagicMock) -> MagicMock:
         """Create mock RoomCoordinator."""
         from custom_components.adaptive_cover.room_coordinator import RoomCoordinator
 
@@ -837,10 +844,11 @@ class TestSensorAsyncSetupEntry:
             has_direct_sun=True,
             last_known={"cloud": 30.0},
         )
-        coordinator.start_sun = datetime(2024, 6, 21, 8, 0, 0)
-        coordinator.end_sun = datetime(2024, 6, 21, 20, 0, 0)
         coordinator.comfort_status = "comfortable"
+        coordinator.outside_temperature = 22.5
         coordinator.last_update_success = True
+        coordinator._child_coordinators = []
+        coordinator.config_entry = mock_room_config_entry
         return coordinator
 
     @pytest.fixture
@@ -911,13 +919,13 @@ class TestSensorAsyncSetupEntry:
         return entry
 
     @pytest.mark.asyncio
-    async def test_setup_room_entry_creates_time_sensors_and_comfort_status(
+    async def test_setup_room_entry_creates_sensors_and_comfort_status(
         self,
         hass,
         mock_room_config_entry: MagicMock,
         mock_room_coordinator: MagicMock,
     ) -> None:
-        """Test async_setup_entry creates time sensors and comfort status for room."""
+        """Test async_setup_entry creates sensors for room."""
         hass.data[DOMAIN] = {mock_room_config_entry.entry_id: mock_room_coordinator}
 
         entities_added = []
@@ -927,11 +935,11 @@ class TestSensorAsyncSetupEntry:
 
         await async_setup_entry(hass, mock_room_config_entry, add_entities)
 
-        # Room gets: Start Sun, End Sun, Comfort Status (no cloud)
-        assert len(entities_added) == 3
+        # Room gets: Outside Temperature, Comfort Status (no cloud)
+        assert len(entities_added) == 2
 
         entity_types = [type(e).__name__ for e in entities_added]
-        assert "AdaptiveRoomTimeSensorEntity" in entity_types
+        assert "AdaptiveRoomOutsideTempSensorEntity" in entity_types
         assert "AdaptiveRoomComfortStatusSensorEntity" in entity_types
 
     @pytest.mark.asyncio
@@ -953,8 +961,8 @@ class TestSensorAsyncSetupEntry:
 
         await async_setup_entry(hass, mock_room_config_entry_with_cloud, add_entities)
 
-        # Room with cloud gets: Cloud, Start Sun, End Sun, Comfort Status
-        assert len(entities_added) == 4
+        # Room with cloud gets: Cloud, Outside Temperature, Comfort Status
+        assert len(entities_added) == 3
 
         entity_types = [type(e).__name__ for e in entities_added]
         assert "AdaptiveCoverCloudSensorEntity" in entity_types
@@ -1014,13 +1022,13 @@ class TestSensorAsyncSetupEntry:
         assert "AdaptiveCoverCloudSensorEntity" in entity_types
 
     @pytest.mark.asyncio
-    async def test_setup_cover_in_room_creates_only_position_sensor(
+    async def test_setup_cover_in_room_creates_sensors(
         self,
         hass,
         mock_cover_in_room_config_entry: MagicMock,
         mock_cover_coordinator: MagicMock,
     ) -> None:
-        """Test async_setup_entry creates only position sensor for cover in room."""
+        """Test async_setup_entry creates sensors for cover in room."""
         hass.data[DOMAIN] = {
             mock_cover_in_room_config_entry.entry_id: mock_cover_coordinator
         }
@@ -1032,15 +1040,19 @@ class TestSensorAsyncSetupEntry:
 
         await async_setup_entry(hass, mock_cover_in_room_config_entry, add_entities)
 
-        # Cover in room gets only: Position sensor (room handles time sensors)
-        assert len(entities_added) == 1
+        # Cover in room gets: Position, Start, End time sensors
+        # (no proxy sensors without room_coordinator in hass.data)
+        assert len(entities_added) == 3
 
         entity_types = [type(e).__name__ for e in entities_added]
         assert "AdaptiveCoverSensorEntity" in entity_types
+        assert "AdaptiveCoverTimeSensorEntity" in entity_types
 
-        # Verify the sensor knows it's in a room
-        position_sensor = entities_added[0]
-        assert position_sensor._room_id == "room_123"
+        # Verify position sensor knows it's in a room
+        position_sensors = [
+            e for e in entities_added if type(e).__name__ == "AdaptiveCoverSensorEntity"
+        ]
+        assert position_sensors[0]._room_id == "room_123"
 
 
 class TestTimeSensorEntityDeviceInfoWithRoom:

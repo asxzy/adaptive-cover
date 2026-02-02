@@ -161,25 +161,25 @@ class TestAsyncSetupRoomEntry:
             mock_coordinator.async_refresh = AsyncMock()
             mock_coordinator_class.return_value = mock_coordinator
 
-            with patch(
-                "custom_components.adaptive_cover.async_track_state_change_event"
-            ) as mock_track:
-                mock_track.return_value = MagicMock()
-
-                with patch.object(
+            with (
+                patch(
+                    "custom_components.adaptive_cover.async_track_state_change_event"
+                ) as mock_track,
+                patch.object(
                     hass.config_entries,
                     "async_forward_entry_setups",
                     new_callable=AsyncMock,
-                ) as mock_forward:
-                    with patch(
-                        "custom_components.adaptive_cover.async_dispatcher_send"
-                    ):
-                        result = await _async_setup_room_entry(hass, mock_room_entry)
+                ) as mock_forward,
+                patch("custom_components.adaptive_cover.async_dispatcher_send"),
+            ):
+                mock_track.return_value = MagicMock()
 
-                        assert result is True
-                        mock_coordinator_class.assert_called_once()
-                        mock_coordinator.async_config_entry_first_refresh.assert_called_once()
-                        mock_forward.assert_called_once()
+                result = await _async_setup_room_entry(hass, mock_room_entry)
+
+                assert result is True
+                mock_coordinator_class.assert_called_once()
+                mock_coordinator.async_config_entry_first_refresh.assert_called_once()
+                mock_forward.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_setup_room_entry_stores_coordinator(
@@ -325,10 +325,10 @@ class TestAsyncSetupCoverEntry:
                 )
 
     @pytest.mark.asyncio
-    async def test_setup_cover_entry_room_not_loaded_yet(
+    async def test_setup_cover_entry_room_not_loaded_waits_with_timeout(
         self, hass: HomeAssistant, mock_cover_entry_with_room: MagicMock
     ) -> None:
-        """Test _async_setup_cover_entry when room is not yet loaded."""
+        """Test _async_setup_cover_entry waits for room with timeout."""
         hass.data.setdefault(DOMAIN, {})
 
         with patch(
@@ -346,6 +346,11 @@ class TestAsyncSetupCoverEntry:
                     hass.config_entries,
                     "async_forward_entry_setups",
                     new_callable=AsyncMock,
+                ) as mock_forward,
+                patch(
+                    "custom_components.adaptive_cover._async_wait_for_room",
+                    new_callable=AsyncMock,
+                    return_value=None,  # Simulate timeout
                 ),
             ):
                 result = await _async_setup_cover_entry(
@@ -353,11 +358,9 @@ class TestAsyncSetupCoverEntry:
                 )
 
                 assert result is True
-                # Should add to pending covers
-                assert "pending_covers" in hass.data[DOMAIN]
-                assert (
-                    mock_cover_entry_with_room.entry_id
-                    in hass.data[DOMAIN]["pending_covers"]["test_room_123"]
+                # Should fall back to standalone mode with STANDALONE_COVER_PLATFORMS
+                mock_forward.assert_called_once_with(
+                    mock_cover_entry_with_room, STANDALONE_COVER_PLATFORMS
                 )
 
     @pytest.mark.asyncio
@@ -603,8 +606,8 @@ class TestAsyncInitializeIntegration:
         assert result is True
 
 
-class TestPendingCoversConnection:
-    """Tests for pending covers connection logic."""
+class TestRoomSignalDispatch:
+    """Tests for room signal dispatch and cover discovery."""
 
     @pytest.fixture
     def mock_room_entry(self) -> MagicMock:
@@ -618,19 +621,13 @@ class TestPendingCoversConnection:
         return entry
 
     @pytest.mark.asyncio
-    async def test_room_connects_pending_covers(
+    async def test_room_fires_signal_after_setup(
         self, hass: HomeAssistant, mock_room_entry: MagicMock
     ) -> None:
-        """Test room connects pending covers when it loads."""
-        hass.data.setdefault(DOMAIN, {})
+        """Test room fires SIGNAL_ROOM_LOADED after setup completes."""
+        from custom_components.adaptive_cover.const import SIGNAL_ROOM_LOADED
 
-        # Set up pending cover coordinator
-        mock_cover_coordinator = MagicMock()
-        mock_cover_coordinator.set_room_coordinator = MagicMock()
-        hass.data[DOMAIN]["pending_covers"] = {
-            "test_room_123": ["test_cover_123"]
-        }
-        hass.data[DOMAIN]["test_cover_123"] = mock_cover_coordinator
+        hass.data.setdefault(DOMAIN, {})
 
         with patch(
             "custom_components.adaptive_cover.RoomCoordinator"
@@ -638,8 +635,6 @@ class TestPendingCoversConnection:
             mock_coordinator = MagicMock()
             mock_coordinator.async_config_entry_first_refresh = AsyncMock()
             mock_coordinator.async_discover_existing_covers = AsyncMock()
-            mock_coordinator.async_refresh = AsyncMock()
-            mock_coordinator.register_cover = MagicMock()
             mock_coordinator_class.return_value = mock_coordinator
 
             with (
@@ -651,32 +646,23 @@ class TestPendingCoversConnection:
                     "async_forward_entry_setups",
                     new_callable=AsyncMock,
                 ),
-                patch("custom_components.adaptive_cover.async_dispatcher_send"),
+                patch(
+                    "custom_components.adaptive_cover.async_dispatcher_send"
+                ) as mock_dispatcher,
             ):
                 await _async_setup_room_entry(hass, mock_room_entry)
 
-                # Should connect pending cover to room
-                mock_cover_coordinator.set_room_coordinator.assert_called_once_with(
-                    mock_coordinator
+                # Should fire room loaded signal
+                mock_dispatcher.assert_called_once_with(
+                    hass, f"{SIGNAL_ROOM_LOADED}_{mock_room_entry.entry_id}"
                 )
-                mock_coordinator.register_cover.assert_called_once_with(
-                    mock_cover_coordinator
-                )
-                # Should refresh room coordinator after connecting covers
-                mock_coordinator.async_refresh.assert_called()
 
     @pytest.mark.asyncio
-    async def test_pending_covers_cleared_after_connection(
+    async def test_room_discovers_existing_covers_on_reload(
         self, hass: HomeAssistant, mock_room_entry: MagicMock
     ) -> None:
-        """Test pending covers list is cleared after room connects them."""
+        """Test room discovers existing covers on reload."""
         hass.data.setdefault(DOMAIN, {})
-
-        mock_cover_coordinator = MagicMock()
-        hass.data[DOMAIN]["pending_covers"] = {
-            "test_room_123": ["test_cover_123"]
-        }
-        hass.data[DOMAIN]["test_cover_123"] = mock_cover_coordinator
 
         with patch(
             "custom_components.adaptive_cover.RoomCoordinator"
@@ -684,7 +670,6 @@ class TestPendingCoversConnection:
             mock_coordinator = MagicMock()
             mock_coordinator.async_config_entry_first_refresh = AsyncMock()
             mock_coordinator.async_discover_existing_covers = AsyncMock()
-            mock_coordinator.async_refresh = AsyncMock()
             mock_coordinator_class.return_value = mock_coordinator
 
             with (
@@ -700,8 +685,8 @@ class TestPendingCoversConnection:
             ):
                 await _async_setup_room_entry(hass, mock_room_entry)
 
-                # Should clear pending covers list for this room
-                assert "test_room_123" not in hass.data[DOMAIN]["pending_covers"]
+                # Should call async_discover_existing_covers
+                mock_coordinator.async_discover_existing_covers.assert_called_once()
 
 
 class TestCoverUnloadWithOldRoomId:
@@ -776,11 +761,6 @@ class TestEntityTracking:
         self, hass: HomeAssistant, mock_room_entry_with_entities: MagicMock
     ) -> None:
         """Test room entry tracks optional entities configured in options."""
-        from custom_components.adaptive_cover.const import (
-            CONF_TEMP_ENTITY,
-            CONF_PRESENCE_ENTITY,
-            CONF_WEATHER_ENTITY,
-        )
 
         hass.data.setdefault(DOMAIN, {})
 

@@ -290,66 +290,25 @@ class TestRoomCoordinatorCoverManagement:
 
         assert len(room_coordinator._child_coordinators) == 0
 
-    def test_start_sun_no_covers(self, room_coordinator: RoomCoordinator) -> None:
-        """Test start_sun with no covers returns None."""
-        assert room_coordinator.start_sun is None
+    def test_comfort_status_from_data(self, room_coordinator: RoomCoordinator) -> None:
+        """Test comfort_status returns value from coordinator data."""
+        # Comfort status is calculated at room level from inside temperature
+        # When data is None, it defaults to "comfortable"
+        from custom_components.adaptive_cover.const import COMFORT_STATUS_COMFORTABLE
 
-    def test_end_sun_no_covers(self, room_coordinator: RoomCoordinator) -> None:
-        """Test end_sun with no covers returns None."""
-        assert room_coordinator.end_sun is None
+        assert room_coordinator.comfort_status == COMFORT_STATUS_COMFORTABLE
 
-    def test_comfort_status_no_covers(self, room_coordinator: RoomCoordinator) -> None:
-        """Test comfort_status with no covers returns None."""
-        assert room_coordinator.comfort_status is None
-
-    def test_start_sun_with_covers(self, room_coordinator: RoomCoordinator) -> None:
-        """Test start_sun aggregates from covers."""
-        from datetime import datetime
-
-        mock_cover1 = MagicMock()
-        mock_cover1.data.states = {"start": datetime(2024, 6, 21, 8, 0, 0)}
-
-        mock_cover2 = MagicMock()
-        mock_cover2.data.states = {"start": datetime(2024, 6, 21, 9, 0, 0)}
-
-        room_coordinator.register_cover(mock_cover1)
-        room_coordinator.register_cover(mock_cover2)
-
-        # Should return the earliest time
-        result = room_coordinator.start_sun
-        assert result == datetime(2024, 6, 21, 8, 0, 0)
-
-    def test_end_sun_with_covers(self, room_coordinator: RoomCoordinator) -> None:
-        """Test end_sun aggregates from covers."""
-        from datetime import datetime
-
-        mock_cover1 = MagicMock()
-        mock_cover1.data.states = {"end": datetime(2024, 6, 21, 18, 0, 0)}
-
-        mock_cover2 = MagicMock()
-        mock_cover2.data.states = {"end": datetime(2024, 6, 21, 19, 0, 0)}
-
-        room_coordinator.register_cover(mock_cover1)
-        room_coordinator.register_cover(mock_cover2)
-
-        # Should return the latest time
-        result = room_coordinator.end_sun
-        assert result == datetime(2024, 6, 21, 19, 0, 0)
-
-    def test_comfort_status_with_covers(
+    def test_outside_temperature_from_data(
         self, room_coordinator: RoomCoordinator
     ) -> None:
-        """Test comfort_status returns first cover's status."""
-        mock_cover1 = MagicMock()
-        mock_cover1.comfort_status = "comfortable"
+        """Test outside_temperature returns value from coordinator data."""
+        # Initially data is None, so outside_temperature should be None
+        assert room_coordinator.outside_temperature is None
 
-        mock_cover2 = MagicMock()
-        mock_cover2.comfort_status = "too_warm"
-
-        room_coordinator.register_cover(mock_cover1)
-        room_coordinator.register_cover(mock_cover2)
-
-        assert room_coordinator.comfort_status == "comfortable"
+    def test_cloud_coverage_from_data(self, room_coordinator: RoomCoordinator) -> None:
+        """Test cloud_coverage returns value from coordinator data."""
+        # Initially data is None, so cloud_coverage should be None
+        assert room_coordinator.cloud_coverage is None
 
 
 class TestRoomCoordinatorSensorUpdates:
@@ -505,49 +464,33 @@ class TestRoomCoordinatorWithNoCoverData:
             coordinator = RoomCoordinator(hass, mock_config_entry)
             return coordinator
 
-    def test_start_sun_with_cover_no_data(
+    def test_comfort_status_from_room_data(
         self, room_coordinator: RoomCoordinator
     ) -> None:
-        """Test start_sun when cover has no data."""
-        mock_cover = MagicMock()
-        mock_cover.data = None
+        """Test comfort_status is calculated from room data, not covers."""
+        from custom_components.adaptive_cover.const import COMFORT_STATUS_COMFORTABLE
 
+        # Register covers (they don't affect comfort_status anymore)
+        mock_cover = MagicMock()
         room_coordinator.register_cover(mock_cover)
 
-        assert room_coordinator.start_sun is None
+        # Comfort status is calculated at room level from inside temperature
+        # Without temperature data, it defaults to "comfortable"
+        assert room_coordinator.comfort_status == COMFORT_STATUS_COMFORTABLE
 
-    def test_end_sun_with_cover_no_data(
+    def test_outside_temperature_from_room_data(
         self, room_coordinator: RoomCoordinator
     ) -> None:
-        """Test end_sun when cover has no data."""
-        mock_cover = MagicMock()
-        mock_cover.data = None
+        """Test outside_temperature is from room data."""
+        # Without coordinator data, outside_temperature should be None
+        assert room_coordinator.outside_temperature is None
 
-        room_coordinator.register_cover(mock_cover)
-
-        assert room_coordinator.end_sun is None
-
-    def test_start_sun_with_cover_no_start_key(
+    def test_cloud_coverage_from_room_data(
         self, room_coordinator: RoomCoordinator
     ) -> None:
-        """Test start_sun when cover data has no start key."""
-        mock_cover = MagicMock()
-        mock_cover.data.states = {"end": "2024-06-21 20:00:00"}
-
-        room_coordinator.register_cover(mock_cover)
-
-        assert room_coordinator.start_sun is None
-
-    def test_comfort_status_with_no_status(
-        self, room_coordinator: RoomCoordinator
-    ) -> None:
-        """Test comfort_status when cover has no status."""
-        mock_cover = MagicMock()
-        mock_cover.comfort_status = None
-
-        room_coordinator.register_cover(mock_cover)
-
-        assert room_coordinator.comfort_status is None
+        """Test cloud_coverage is from room data."""
+        # Without coordinator data, cloud_coverage should be None
+        assert room_coordinator.cloud_coverage is None
 
 
 class TestRoomCoordinatorAsync:

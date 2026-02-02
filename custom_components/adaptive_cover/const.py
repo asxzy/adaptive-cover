@@ -9,6 +9,9 @@ _LOGGER = logging.getLogger(__name__)
 # Signal for room coordinator ready notification
 SIGNAL_ROOM_LOADED = f"{DOMAIN}_room_loaded"
 
+# Signal for cover registration with room (for dynamic proxy sensor creation)
+SIGNAL_COVER_REGISTERED = f"{DOMAIN}_cover_registered"
+
 ATTR_POSITION = "position"
 ATTR_TILT_POSITION = "tilt_position"
 

@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import (
+    async_dispatcher_connect,
+    async_dispatcher_send,
+)
 from homeassistant.helpers.event import (
     async_track_state_change_event,
 )
@@ -26,6 +31,9 @@ from .const import (
 )
 from .coordinator import AdaptiveDataUpdateCoordinator
 from .room_coordinator import RoomCoordinator
+
+# Timeout for waiting for room to load (in seconds)
+ROOM_WAIT_TIMEOUT = 30
 
 # Platforms for room entries
 ROOM_PLATFORMS = [
@@ -117,33 +125,14 @@ async def _async_setup_room_entry(hass: HomeAssistant, entry: ConfigEntry) -> bo
         )
     )
 
-    await coordinator.async_config_entry_first_refresh()
-
-    # Store room coordinator with room_ prefix for lookup by covers
+    # Store room coordinator early so covers can find it during their setup
     hass.data[DOMAIN][f"room_{entry.entry_id}"] = coordinator
-    # Also store with entry_id for standard lookup
     hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    await coordinator.async_config_entry_first_refresh()
 
     # Discover existing covers that belong to this room (handles reload case)
     await coordinator.async_discover_existing_covers()
-
-    # Connect any pending covers that loaded before this room
-    pending_covers = hass.data[DOMAIN].get("pending_covers", {}).get(entry.entry_id, [])
-    if pending_covers:
-        _LOGGER.debug(
-            "Connecting %d pending covers to room %s",
-            len(pending_covers),
-            entry.data.get("name"),
-        )
-        for cover_entry_id in pending_covers:
-            cover_coordinator = hass.data[DOMAIN].get(cover_entry_id)
-            if cover_coordinator:
-                cover_coordinator.set_room_coordinator(coordinator)
-                coordinator.register_cover(cover_coordinator)
-        # Clear pending list for this room
-        hass.data[DOMAIN]["pending_covers"].pop(entry.entry_id, None)
-        # Refresh room to update aggregated sensors
-        await coordinator.async_refresh()
 
     await hass.config_entries.async_forward_entry_setups(entry, ROOM_PLATFORMS)
 
@@ -158,36 +147,38 @@ async def _async_setup_cover_entry(hass: HomeAssistant, entry: ConfigEntry) -> b
     """Set up a cover entry (standalone or part of room)."""
     room_id = entry.data.get(CONF_ROOM_ID)
     room_coordinator = None
-    waiting_for_room = False
 
-    # If part of a room, get the room coordinator
+    # If part of a room, wait for room coordinator to be ready
     if room_id:
         room_coordinator = hass.data[DOMAIN].get(f"room_{room_id}")
         if room_coordinator is None:
-            # Room not loaded yet - add to pending list and wait for signal
+            # Room not loaded yet - wait for signal with timeout
             _LOGGER.debug(
-                "Room %s not yet loaded for cover %s, adding to pending list",
+                "Room %s not yet loaded for cover %s, waiting...",
                 room_id,
                 entry.data.get("name"),
             )
-            hass.data[DOMAIN].setdefault("pending_covers", {}).setdefault(
-                room_id, []
-            ).append(entry.entry_id)
-            waiting_for_room = True
+            room_coordinator = await _async_wait_for_room(hass, room_id, entry)
+            if room_coordinator is None:
+                _LOGGER.error(
+                    "Timeout waiting for room %s to load for cover %s. "
+                    "Cover will operate in standalone mode.",
+                    room_id,
+                    entry.data.get("name"),
+                )
+                # Fall back to standalone mode - clear room_id for this session
+                room_id = None
 
-    # Create cover coordinator (without room coordinator if not yet available)
+    # Create cover coordinator
     coordinator = AdaptiveDataUpdateCoordinator(hass, entry, room_coordinator)
 
-    # Determine which options to use for entity tracking
-    # If waiting for room, use cover's own options temporarily but set up for room platforms
+    # Store coordinator so it's available for room discovery on reload
+    hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    # Determine which options/platforms to use
     if room_coordinator:
         # Use room's options for shared entities
         options = room_coordinator.config_entry.options
-        platforms = COVER_IN_ROOM_PLATFORMS
-    elif waiting_for_room:
-        # Room not loaded yet, use cover's options temporarily
-        # but use room platforms since we know it belongs to a room
-        options = entry.options
         platforms = COVER_IN_ROOM_PLATFORMS
     else:
         # Standalone cover
@@ -215,7 +206,7 @@ async def _async_setup_cover_entry(hass: HomeAssistant, entry: ConfigEntry) -> b
 
     # Track state changes for entities
     # Only track if standalone (room handles tracking for room members)
-    if not room_coordinator and not waiting_for_room:
+    if not room_coordinator:
         entry.async_on_unload(
             async_track_state_change_event(
                 hass,
@@ -236,17 +227,62 @@ async def _async_setup_cover_entry(hass: HomeAssistant, entry: ConfigEntry) -> b
 
     await coordinator.async_config_entry_first_refresh()
 
-    # Register with room coordinator if part of a room and room is loaded
+    # Register with room coordinator if part of a room
     if room_coordinator:
         room_coordinator.register_cover(coordinator)
         await room_coordinator.async_refresh()  # Trigger room sensors to update
-
-    hass.data[DOMAIN][entry.entry_id] = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, platforms)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
+
+
+async def _async_wait_for_room(
+    hass: HomeAssistant, room_id: str, entry: ConfigEntry
+) -> RoomCoordinator | None:
+    """Wait for room coordinator to become available.
+
+    Uses dispatcher signal with asyncio.Event for synchronization.
+    Returns the room coordinator if found within timeout, None otherwise.
+    """
+    room_ready = asyncio.Event()
+    room_coordinator_holder: list[RoomCoordinator | None] = [None]
+
+    @callback
+    def _room_loaded_callback() -> None:
+        """Handle room loaded signal."""
+        room_coordinator_holder[0] = hass.data[DOMAIN].get(f"room_{room_id}")
+        room_ready.set()
+
+    # Subscribe to room loaded signal
+    unsub = async_dispatcher_connect(
+        hass, f"{SIGNAL_ROOM_LOADED}_{room_id}", _room_loaded_callback
+    )
+
+    try:
+        # Check if room became available while we were setting up
+        room_coordinator = hass.data[DOMAIN].get(f"room_{room_id}")
+        if room_coordinator is not None:
+            _LOGGER.debug(
+                "Room %s became available during setup for cover %s",
+                room_id,
+                entry.data.get("name"),
+            )
+            return room_coordinator
+
+        # Wait for room signal with timeout
+        await asyncio.wait_for(room_ready.wait(), timeout=ROOM_WAIT_TIMEOUT)
+        _LOGGER.debug(
+            "Room %s loaded, continuing setup for cover %s",
+            room_id,
+            entry.data.get("name"),
+        )
+        return room_coordinator_holder[0]
+    except TimeoutError:
+        return None
+    finally:
+        unsub()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

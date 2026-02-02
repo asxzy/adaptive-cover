@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -16,6 +17,9 @@ from .config_context_adapter import ConfigContextAdapter
 from .helpers import get_safe_state
 from .const import (
     _LOGGER,
+    COMFORT_STATUS_COMFORTABLE,
+    COMFORT_STATUS_TOO_COLD,
+    COMFORT_STATUS_TOO_HOT,
     CONF_CLIMATE_MODE,
     CONF_CLOUD_ENTITY,
     CONF_CLOUD_THRESHOLD,
@@ -50,6 +54,7 @@ from .const import (
     DOMAIN,
     EntryType,
     LOGGER,
+    SIGNAL_COVER_REGISTERED,
 )
 
 if TYPE_CHECKING:
@@ -72,6 +77,10 @@ class RoomData:
     weather_toggle: bool | None
     is_presence: bool | None
     has_direct_sun: bool | None
+    # Room-calculated values
+    outside_temperature: float | None = None
+    comfort_status: str | None = None
+    cloud_coverage: float | None = None
     climate_data_args: list | None = None
     # Sensor availability for graceful degradation
     sensor_available: dict = field(default_factory=dict)
@@ -118,16 +127,18 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
         self._control_mode_select = None
 
         # Last known sensor values for graceful degradation
-        self._last_known: dict[str, bool | None] = {
+        self._last_known: dict[str, bool | float | None] = {
             "has_direct_sun": None,
             "is_presence": None,
             "lux": None,
             "irradiance": None,
             "cloud": None,
+            "outside_temperature": None,
         }
         self._sensor_available: dict[str, bool] = {
             "has_direct_sun": True,
             "is_presence": True,
+            "outside_temperature": True,
         }
         self._store = Store(
             hass,
@@ -147,6 +158,12 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
             )
             # Notify listeners that data has changed (triggers room sensor updates)
             self.async_set_updated_data(self.data)
+            # Fire signal for dynamic proxy sensor creation on room device
+            async_dispatcher_send(
+                self.hass,
+                f"{SIGNAL_COVER_REGISTERED}_{self.config_entry.entry_id}",
+                cover_coordinator,
+            )
 
     def unregister_cover(
         self, cover_coordinator: AdaptiveDataUpdateCoordinator
@@ -220,6 +237,10 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
         await self._update_cloud_value(options)
         await self._update_presence_value(options)
         await self._update_weather_value(options)
+        await self._update_outside_temperature(options)
+
+        # Calculate comfort status based on inside temperature
+        comfort_status = self._calculate_comfort_status(options)
 
         # Build climate data arguments for child coordinators
         climate_data_args = self._get_climate_data_args(options)
@@ -233,6 +254,9 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
             weather_toggle=self._weather_toggle,
             is_presence=self._last_known.get("is_presence"),
             has_direct_sun=self._last_known.get("has_direct_sun"),
+            outside_temperature=self._last_known.get("outside_temperature"),
+            comfort_status=comfort_status,
+            cloud_coverage=self._last_known.get("cloud"),
             climate_data_args=climate_data_args,
             sensor_available=self._sensor_available.copy(),
             last_known=self._last_known.copy(),
@@ -340,6 +364,91 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
                 self._last_known.get("has_direct_sun"),
             )
 
+    async def _update_outside_temperature(self, options) -> None:
+        """Fetch outside temperature from dedicated entity or weather entity."""
+        outside_temp_entity = options.get(CONF_OUTSIDETEMP_ENTITY)
+        weather_entity = options.get(CONF_WEATHER_ENTITY)
+
+        value = None
+
+        # Try dedicated outside temperature entity first
+        if outside_temp_entity:
+            value = get_safe_state(self.hass, outside_temp_entity)
+            self.logger.debug(
+                "Outside temp entity %s state: %s",
+                outside_temp_entity,
+                value,
+            )
+
+        # Fall back to weather entity temperature attribute
+        if value is None and weather_entity:
+            state = self.hass.states.get(weather_entity)
+            if state and state.attributes:
+                value = state.attributes.get("temperature")
+                self.logger.debug(
+                    "Weather entity %s temperature attribute: %s",
+                    weather_entity,
+                    value,
+                )
+
+        if value is not None:
+            try:
+                temp_value = float(value)
+                if self._last_known.get("outside_temperature") != temp_value:
+                    self._last_known["outside_temperature"] = temp_value
+                    await self._async_save_last_known()
+                    self.logger.debug(
+                        "Updated outside_temperature last_known to: %s", temp_value
+                    )
+                self._sensor_available["outside_temperature"] = True
+            except (ValueError, TypeError) as err:
+                self.logger.warning(
+                    "Invalid outside temperature value '%s': %s", value, err
+                )
+                self._sensor_available["outside_temperature"] = False
+        else:
+            self._sensor_available["outside_temperature"] = False
+            self.logger.debug(
+                "Outside temperature unavailable, keeping last known: %s",
+                self._last_known.get("outside_temperature"),
+            )
+
+    def _calculate_comfort_status(self, options) -> str:
+        """Calculate comfort status based on inside temperature vs thresholds."""
+        temp_entity = options.get(CONF_TEMP_ENTITY)
+        temp_low = options.get(CONF_TEMP_LOW)
+        temp_high = options.get(CONF_TEMP_HIGH)
+
+        # Default to comfortable if no temperature sensor configured
+        if not temp_entity:
+            return COMFORT_STATUS_COMFORTABLE
+
+        value = get_safe_state(self.hass, temp_entity)
+        if value is None:
+            self.logger.debug("Inside temp entity unavailable for comfort calculation")
+            return COMFORT_STATUS_COMFORTABLE
+
+        try:
+            inside_temp = float(value)
+        except (ValueError, TypeError):
+            self.logger.warning(
+                "Invalid inside temperature value '%s' for comfort calculation", value
+            )
+            return COMFORT_STATUS_COMFORTABLE
+
+        self.logger.debug(
+            "Comfort calculation: inside_temp=%s, temp_low=%s, temp_high=%s",
+            inside_temp,
+            temp_low,
+            temp_high,
+        )
+
+        if temp_high is not None and inside_temp > temp_high:
+            return COMFORT_STATUS_TOO_HOT
+        if temp_low is not None and inside_temp < temp_low:
+            return COMFORT_STATUS_TOO_COLD
+        return COMFORT_STATUS_COMFORTABLE
+
     def _get_climate_data_args(self, options) -> list:
         """Get climate data arguments for ClimateCoverData construction."""
         return [
@@ -383,55 +492,24 @@ class RoomCoordinator(DataUpdateCoordinator[RoomData]):
             await child.async_force_update_covers()
 
     @property
-    def start_sun(self) -> dt.datetime | None:
-        """Get earliest start sun time from all covers."""
-        self.logger.debug(
-            "start_sun: %d child coordinators", len(self._child_coordinators)
-        )
-        times = []
-        for c in self._child_coordinators:
-            self.logger.debug(
-                "start_sun: child data=%s, states=%s",
-                c.data is not None,
-                c.data.states if c.data else None,
-            )
-            if c.data and c.data.states.get("start"):
-                times.append(c.data.states.get("start"))
-        result = min(times) if times else None
-        self.logger.debug("start_sun: returning %s", result)
-        return result
-
-    @property
-    def end_sun(self) -> dt.datetime | None:
-        """Get latest end sun time from all covers."""
-        self.logger.debug(
-            "end_sun: %d child coordinators", len(self._child_coordinators)
-        )
-        times = []
-        for c in self._child_coordinators:
-            self.logger.debug(
-                "end_sun: child data=%s, states=%s",
-                c.data is not None,
-                c.data.states if c.data else None,
-            )
-            if c.data and c.data.states.get("end"):
-                times.append(c.data.states.get("end"))
-        result = max(times) if times else None
-        self.logger.debug("end_sun: returning %s", result)
-        return result
-
-    @property
     def comfort_status(self) -> str | None:
-        """Get comfort status from child covers (use first cover's status)."""
-        self.logger.debug(
-            "comfort_status: %d child coordinators", len(self._child_coordinators)
-        )
-        for child in self._child_coordinators:
-            status = child.comfort_status
-            self.logger.debug("comfort_status: child status=%s", status)
-            if status:
-                return status
-        self.logger.debug("comfort_status: returning None")
+        """Get comfort status calculated by room from inside temperature."""
+        if self.data is not None:
+            return self.data.comfort_status
+        return COMFORT_STATUS_COMFORTABLE
+
+    @property
+    def outside_temperature(self) -> float | None:
+        """Get outside temperature."""
+        if self.data is not None:
+            return self.data.outside_temperature
+        return None
+
+    @property
+    def cloud_coverage(self) -> float | None:
+        """Get cloud coverage value."""
+        if self.data is not None:
+            return self.data.cloud_coverage
         return None
 
     async def async_check_entity_state_change(self, event) -> None:

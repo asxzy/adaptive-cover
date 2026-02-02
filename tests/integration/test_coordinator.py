@@ -2369,7 +2369,9 @@ class TestStateChangeHandlers:
         coordinator._control_mode = CONTROL_MODE_AUTO
         coordinator.state_change = True
 
-        await coordinator.async_handle_state_change(50, coordinator.config_entry.options)
+        await coordinator.async_handle_state_change(
+            50, coordinator.config_entry.options
+        )
 
         coordinator.async_handle_call_service.assert_called_once()
         assert coordinator.state_change is False
@@ -2382,7 +2384,9 @@ class TestStateChangeHandlers:
         coordinator._control_mode = CONTROL_MODE_DISABLED
         coordinator.state_change = True
 
-        await coordinator.async_handle_state_change(50, coordinator.config_entry.options)
+        await coordinator.async_handle_state_change(
+            50, coordinator.config_entry.options
+        )
 
         coordinator.async_handle_call_service.assert_not_called()
         assert coordinator.state_change is False
