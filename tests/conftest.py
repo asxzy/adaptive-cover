@@ -212,3 +212,42 @@ def mock_hass() -> MagicMock:
     hass.states = MagicMock()
     hass.states.get = MagicMock(return_value=None)
     return hass
+
+
+@pytest.fixture
+def climate_data_factory(mock_hass: MagicMock, mock_logger):
+    """Create mock ClimateCoverData objects with controlled sensor values.
+
+    Sensor property semantics:
+    - lux: True = below threshold (no sun), False = above threshold (has sun)
+    - irradiance: True = below threshold (no sun), False = above threshold (has sun)
+    - cloud: True = above threshold (too cloudy), False = below threshold (sunny)
+    - has_direct_sun: True = weather allows sun, False = weather blocks, None = unavailable
+    - is_presence: True = occupied, False = not occupied, None = unavailable
+    """
+    from custom_components.adaptive_cover.calculation import ClimateCoverData
+
+    def _create(
+        is_presence: bool | None = True,
+        has_direct_sun: bool | None = True,
+        lux: bool | None = False,
+        irradiance: bool | None = False,
+        cloud: bool | None = False,
+        is_summer: bool = False,
+        is_winter: bool = False,
+        blind_type: str = "cover_blind",
+    ) -> MagicMock:
+        """Create a mock ClimateCoverData with specified values."""
+        data = MagicMock(spec=ClimateCoverData)
+        data.is_presence = is_presence
+        data.has_direct_sun = has_direct_sun
+        data.lux = lux
+        data.irradiance = irradiance
+        data.cloud = cloud
+        data.is_summer = is_summer
+        data.is_winter = is_winter
+        data.blind_type = blind_type
+        data.logger = mock_logger
+        return data
+
+    return _create
